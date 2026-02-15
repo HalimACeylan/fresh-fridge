@@ -11,6 +11,7 @@ class HomeManagerAdminScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: const Color(0xFFF6F8F6),
       body: SafeArea(
+        bottom: false,
         child: Stack(
           children: [
             Column(

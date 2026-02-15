@@ -204,130 +204,114 @@ class InsideFridgeScreen extends StatelessWidget {
   }
 
   Widget _buildStatsGrid() {
-    return Row(
-      children: [
-        Expanded(
-          child: Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.red[50],
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.red[100]!),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Icon(
-                        Icons.warning,
-                        color: Colors.red,
-                        size: 20,
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.red[100],
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Text(
-                        'Urgent',
-                        style: TextStyle(
-                          color: Colors.red,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                const Text(
-                  '3',
-                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                ),
-                const Text(
-                  'Items expiring soon',
-                  style: TextStyle(fontSize: 12, color: Colors.grey),
-                ),
-              ],
-            ),
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      clipBehavior: Clip.none,
+      child: Row(
+        children: [
+          _buildStatCard(
+            color: Colors.red[50]!,
+            borderColor: Colors.red[100]!,
+            icon: Icons.warning,
+            iconColor: Colors.red,
+            badgeColor: Colors.red[100]!,
+            badgeTextColor: Colors.red,
+            badge: 'Urgent',
+            count: '3',
+            label: 'Expiring soon',
           ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: const Color(0xFF13EC13).withOpacity(0.1),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: const Color(0xFF13EC13).withOpacity(0.2),
+          const SizedBox(width: 12),
+          _buildStatCard(
+            color: Colors.amber[50]!,
+            borderColor: Colors.amber[100]!,
+            icon: Icons.schedule,
+            iconColor: Colors.amber,
+            badgeColor: Colors.amber[100]!,
+            badgeTextColor: Colors.amber[800]!,
+            badge: 'Use Soon',
+            count: '5',
+            label: 'Use this week',
+          ),
+          const SizedBox(width: 12),
+          _buildStatCard(
+            color: const Color(0xFF13EC13).withOpacity(0.1),
+            borderColor: const Color(0xFF13EC13).withOpacity(0.2),
+            icon: Icons.inventory_2,
+            iconColor: const Color(0xFF13EC13),
+            badgeColor: const Color(0xFF13EC13).withOpacity(0.2),
+            badgeTextColor: Colors.green,
+            badge: 'Healthy',
+            count: '24',
+            label: 'Total fresh items',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatCard({
+    required Color color,
+    required Color borderColor,
+    required IconData icon,
+    required Color iconColor,
+    required Color badgeColor,
+    required Color badgeTextColor,
+    required String badge,
+    required String count,
+    required String label,
+  }) {
+    return Container(
+      width: 150,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: borderColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(icon, color: iconColor, size: 18),
               ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Icon(
-                        Icons.inventory_2,
-                        color: Color(0xFF13EC13),
-                        size: 20,
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF13EC13).withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Text(
-                        'Healthy',
-                        style: TextStyle(
-                          color: Colors.green,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ],
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: badgeColor,
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                const SizedBox(height: 12),
-                const Text(
-                  '24',
-                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                child: Text(
+                  badge,
+                  style: TextStyle(
+                    color: badgeTextColor,
+                    fontSize: 9,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
-                const Text(
-                  'Total fresh items',
-                  style: TextStyle(fontSize: 12, color: Colors.grey),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ),
-      ],
+          const SizedBox(height: 10),
+          Text(
+            count,
+            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+          ),
+          Text(
+            label,
+            style: const TextStyle(fontSize: 11, color: Colors.grey),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
     );
   }
 
