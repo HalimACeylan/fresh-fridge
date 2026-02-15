@@ -1,12 +1,42 @@
 import 'package:flutter/material.dart';
+import 'package:fridge_app/models/fridge_item.dart';
 import 'package:fridge_app/routes.dart';
+import 'package:fridge_app/services/fridge_service.dart';
 import 'package:fridge_app/widgets/fridge_bottom_navigation.dart';
 
-class FridgeGridScreen extends StatelessWidget {
+class FridgeGridScreen extends StatefulWidget {
   const FridgeGridScreen({super.key});
 
   @override
+  State<FridgeGridScreen> createState() => _FridgeGridScreenState();
+}
+
+class _FridgeGridScreenState extends State<FridgeGridScreen> {
+  /// null = "All Items", otherwise a specific category filter.
+  FridgeCategory? _selectedCategory;
+  bool _showExpiringOnly = false;
+
+  List<FridgeItem> get _filteredItems {
+    final service = FridgeService.instance;
+    List<FridgeItem> items;
+
+    if (_showExpiringOnly) {
+      items = [...service.getExpiringItems(), ...service.getUseSoonItems()];
+    } else if (_selectedCategory != null) {
+      items = service.getItemsByCategory(_selectedCategory!);
+    } else {
+      items = service.getAllItems();
+    }
+
+    return items;
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final service = FridgeService.instance;
+    final categories = service.getActiveCategories();
+    final items = _filteredItems;
+
     return Scaffold(
       backgroundColor: const Color(0xFFF6F8F6),
       appBar: AppBar(
@@ -14,35 +44,27 @@ class FridgeGridScreen extends StatelessWidget {
         elevation: 1,
         title: const Text(
           'My Fridge',
-          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 18,
+            color: Colors.black,
+          ),
+        ),
+        centerTitle: true,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios, color: Colors.black),
+          onPressed: () => Navigator.pop(context),
         ),
         actions: [
-          IconButton(
-            icon: Stack(
-              children: [
-                const Icon(Icons.notifications_outlined, color: Colors.black),
-                Positioned(
-                  top: 2,
-                  right: 2,
-                  child: Container(
-                    width: 8,
-                    height: 8,
-                    decoration: const BoxDecoration(
-                      color: Colors.red,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            onPressed: () {},
-          ),
           IconButton(
             icon: const Icon(Icons.search, color: Colors.black),
             onPressed: () {},
           ),
+          IconButton(
+            icon: const Icon(Icons.more_vert, color: Colors.black),
+            onPressed: () {},
+          ),
         ],
-        iconTheme: const IconThemeData(color: Colors.black),
       ),
       body: Column(
         children: [
@@ -54,11 +76,33 @@ class FridgeGridScreen extends StatelessWidget {
               scrollDirection: Axis.horizontal,
               child: Row(
                 children: [
-                  _buildFilterChip('All Items', true),
-                  _buildFilterChip('🥕 Produce', false),
-                  _buildFilterChip('🥩 Meat', false),
-                  _buildFilterChip('🥛 Dairy', false),
-                  _buildFilterChip('⚠️ Expiring', false, isWarning: true),
+                  _buildFilterChip(
+                    'All Items',
+                    _selectedCategory == null && !_showExpiringOnly,
+                    onSelected: () => setState(() {
+                      _selectedCategory = null;
+                      _showExpiringOnly = false;
+                    }),
+                  ),
+                  ...categories.map(
+                    (cat) => _buildFilterChip(
+                      '${cat.emoji} ${cat.label}',
+                      _selectedCategory == cat && !_showExpiringOnly,
+                      onSelected: () => setState(() {
+                        _selectedCategory = cat;
+                        _showExpiringOnly = false;
+                      }),
+                    ),
+                  ),
+                  _buildFilterChip(
+                    '⚠️ Expiring',
+                    _showExpiringOnly,
+                    isWarning: true,
+                    onSelected: () => setState(() {
+                      _showExpiringOnly = !_showExpiringOnly;
+                      _selectedCategory = null;
+                    }),
+                  ),
                 ],
               ),
             ),
@@ -67,66 +111,37 @@ class FridgeGridScreen extends StatelessWidget {
           Expanded(
             child: Padding(
               padding: const EdgeInsets.all(16.0),
-              child: GridView.count(
-                crossAxisCount: 2,
-                crossAxisSpacing: 16,
-                mainAxisSpacing: 16,
-                childAspectRatio: 0.8,
-                children: [
-                  _buildItemCard(
-                    context,
-                    'Mixed Veggies',
-                    'Fresh',
-                    '5 days left',
-                    'https://lh3.googleusercontent.com/aida-public/AB6AXuAu1KXQwW-2d40Vp0vWOQMq1H4a6-re4Ol-PU07qolU9u3cDtIosgD4ytTzUX29ws-VdA3drnjvOLLw0eT7rQLRQIpPWBAvsvDZjkFSgAFBGRILvAIQNRevF3D_XK9tk60MeqDSN2OsecHzyrVRXbzkbFHkKr4y5CP6l2U0MEQO3doDCDla4MAUAyfjjwuUbOBhekZCx_RQEq-tu3lKe8nuI7ynuH5-jb6z9Hn8k7VdwkXsK2LM8TIQ7syN1rxrrW_X1OACmPUGq1QW',
-                    statusColor: const Color(0xFF13EC13),
-                  ),
-                  _buildItemCard(
-                    context,
-                    'Whole Milk',
-                    'Opened',
-                    '2 days left',
-                    'https://lh3.googleusercontent.com/aida-public/AB6AXuB9uPpk_Q7Z3UmT0xafYFq-T762teInOhze0NDPK964Pc-guhKIN5O4WBhOVvwpRCn6DDKtsrD5isIb9Q4QMO3kdnG2ruc1qQrDSXABAHmMVGkMnpYwDiVKsvxxhbP82ix_H0LVEUh8c96PQ_O-2-FcIX_R-LOCZ9FCdY9oKuFYI4fy49F_hp2vJojV1tQlIM3Iud8ZCwOIbtaPGFiCsy_CF6r_xsjzA_MNM3NjVe1-jZRopcfb3rpRKcgnwz79LZiZg9SnwT5NXqIF',
-                    statusColor: Colors.orange,
-                    isWarning: true,
-                  ),
-                  _buildItemCard(
-                    context,
-                    'Salmon Fillet',
-                    'Raw',
-                    'Today',
-                    'https://lh3.googleusercontent.com/aida-public/AB6AXuDPBhTDApEe_sOQ9Aj_wuz1QTcxe8TAFn1m9cz2vmSVlXwob7aL9rAcSrvHV533f4cyOWIEpRL_z073BtuAl64I4XDU6cGBKTuRoi5V2TZTsE-wmP185joH4CjNc4nERXRQY-K77QhcuYZ0LlOBmug7_p-Tm4gQdhGPT-Bz-r8rHwpk2XVq9U72fuh45QDR7JDDQM8t1RmeG8_ig0tfZPWaILgbS8NpkJmtLDGhtxcxjAbRD-zzGG3XED1qm14JDR_TblVEyEPzaG-K',
-                    statusColor: Colors.red,
-                    isCritical: true,
-                  ),
-                  _buildItemCard(
-                    context,
-                    'Orange Juice',
-                    'Sealed',
-                    '14 days',
-                    'https://lh3.googleusercontent.com/aida-public/AB6AXuA-88t-HwiRfLsKPdnpgTv4V8_OgAX0qJxyI671Q4-EXDabkijEW4Pin-JoDkQB6Gy-GCdkQgscDHplpnUZhrjEeK17xE97Sqv_ZKri_gKt0VLlNm_IE-t2b0y-lc84GwH8iCqCXpTKPfXD1uoFqc24mW9TG1OlBvl_oD0cUfzYYE2Y8w628URijEROKpEPG8ZUbSaTYwIVKOuwSB9nIt2bi3uAVLK37eXlrltDPPV-WZlXhXDwptw7XFLkjd1LLUWCwNA3HW6zlhrp',
-                    statusColor: const Color(0xFF13EC13),
-                  ),
-                  _buildItemCard(
-                    context,
-                    'Free Range Eggs',
-                    'Dairy',
-                    '8 days',
-                    'https://lh3.googleusercontent.com/aida-public/AB6AXuDXiczZeH3M4vqhBQQqeyRRG7_Ns1MT3Xf-Q4MLfp1SOsvkF7FbNwp3Yyzdgqt86a1iR939HIeGA_w7Tv09tqn93nURB79OrHBS6anHDGhqTC8HyRS_k1VV5_RijnN4EF0eTrAE3kkgpElsxi2Lp52GmVx5K0wRN6BLoW5WkBjVlmeA5Y84xBRcNUpRm180hKxur49gMlqDKIg52UezstHp1KLcOO2qt8J9UzTSXbNjeOG088Nt7d4h3jOuEcYWwdQrIuoLMYP48Kyv',
-                    statusColor: const Color(0xFF13EC13),
-                    quantity: 6,
-                  ),
-                  _buildItemCard(
-                    context,
-                    'Strawberries',
-                    'Produce',
-                    '1 day left',
-                    'https://lh3.googleusercontent.com/aida-public/AB6AXuBTSCpqh3cU0uXdAqmx9isAMNK7stcbYHzA7pyWRQDGhOqTsKcrFfmRZLMtwYeWeuoLC_wKRiFTdPvXTF_677bCj5AI6GQXRAXqCBqrSwZBy5Lf1zEc44apDamaJm7lEwlz9YUeRHVX1nOYM7AbNd1D_xhGerAMDV_Wz7Nl_z_tnr793BesnTzGFL_dg7_ue5lwPp4fNhVjZ2tPRS0dX4w3FOBqFpm1Ngq3NUYCwo8gA0cPdJ3xGYPmrEmnBZ4Vbo7kMAfTP84S1Fnx',
-                    statusColor: Colors.orange,
-                  ),
-                  _buildAddItemCard(context),
-                ],
-              ),
+              child: items.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.kitchen,
+                            size: 64,
+                            color: Colors.grey[300],
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            'No items found',
+                            style: TextStyle(
+                              color: Colors.grey[400],
+                              fontSize: 16,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : GridView.count(
+                      crossAxisCount: 2,
+                      crossAxisSpacing: 16,
+                      mainAxisSpacing: 16,
+                      childAspectRatio: 0.8,
+                      children: [
+                        ...items.map((item) => _buildItemCard(context, item)),
+                        _buildAddItemCard(context),
+                      ],
+                    ),
             ),
           ),
         ],
@@ -148,13 +163,14 @@ class FridgeGridScreen extends StatelessWidget {
     String label,
     bool isSelected, {
     bool isWarning = false,
+    required VoidCallback onSelected,
   }) {
     return Container(
       margin: const EdgeInsets.only(right: 8),
       child: FilterChip(
         label: Text(label),
         selected: isSelected,
-        onSelected: (bool selected) {},
+        onSelected: (_) => onSelected(),
         backgroundColor: isWarning ? Colors.red[50] : Colors.white,
         selectedColor: const Color(0xFF13EC13),
         labelStyle: TextStyle(
@@ -176,17 +192,17 @@ class FridgeGridScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildItemCard(
-    BuildContext context,
-    String title,
-    String subtitle,
-    String expiry,
-    String imageUrl, {
-    Color statusColor = Colors.green,
-    bool isWarning = false,
-    bool isCritical = false,
-    int? quantity,
-  }) {
+  Widget _buildItemCard(BuildContext context, FridgeItem item) {
+    final isCritical = item.freshnessStatus == FreshnessStatus.expired;
+    final isWarning = item.freshnessStatus == FreshnessStatus.expiringSoon;
+    final statusColor = isCritical
+        ? Colors.red
+        : isWarning
+        ? Colors.orange
+        : item.freshnessStatus == FreshnessStatus.useSoon
+        ? Colors.amber
+        : const Color(0xFF13EC13);
+
     return GestureDetector(
       onTap: () {
         Navigator.pushNamed(context, AppRoutes.foodItemDetails);
@@ -213,7 +229,15 @@ class FridgeGridScreen extends StatelessWidget {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  Image.network(imageUrl, fit: BoxFit.cover),
+                  // Item image or emoji fallback
+                  item.imageUrl != null
+                      ? Image.network(
+                          item.imageUrl!,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) =>
+                              _buildEmojiPlaceholder(item),
+                        )
+                      : _buildEmojiPlaceholder(item),
                   Positioned(
                     top: 8,
                     right: 8,
@@ -252,9 +276,9 @@ class FridgeGridScreen extends StatelessWidget {
                         ),
                       ),
                     ),
-                  if (quantity != null)
+                  if (item.unit.label == 'pcs' && item.amount > 1)
                     Positioned(
-                      bottom: 8,
+                      bottom: isCritical ? 24 : 8,
                       left: 8,
                       child: Container(
                         padding: const EdgeInsets.symmetric(
@@ -266,7 +290,7 @@ class FridgeGridScreen extends StatelessWidget {
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Text(
-                          'Qty: $quantity',
+                          'Qty: ${item.amount.toInt()}',
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 10,
@@ -287,7 +311,7 @@ class FridgeGridScreen extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      title,
+                      item.name,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
@@ -298,15 +322,18 @@ class FridgeGridScreen extends StatelessWidget {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          subtitle,
-                          style: TextStyle(
-                            color: Colors.grey[500],
-                            fontSize: 12,
+                        Flexible(
+                          child: Text(
+                            item.amountDisplay,
+                            style: TextStyle(
+                              color: Colors.grey[500],
+                              fontSize: 12,
+                            ),
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                         Text(
-                          expiry,
+                          item.expiryDisplayText,
                           style: TextStyle(
                             color: isCritical || isWarning
                                 ? (isCritical ? Colors.red : Colors.orange)
@@ -323,6 +350,15 @@ class FridgeGridScreen extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildEmojiPlaceholder(FridgeItem item) {
+    return Container(
+      color: Colors.grey[100],
+      child: Center(
+        child: Text(item.category.emoji, style: const TextStyle(fontSize: 48)),
       ),
     );
   }

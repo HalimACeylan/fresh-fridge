@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:fridge_app/models/fridge_item.dart';
 import 'package:fridge_app/routes.dart';
+import 'package:fridge_app/services/fridge_service.dart';
 import 'package:fridge_app/widgets/fridge_bottom_navigation.dart';
 import 'package:fridge_app/widgets/fridge_header.dart';
 
@@ -8,6 +10,11 @@ class InsideFridgeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final service = FridgeService.instance;
+    final stats = service.getStats();
+    final urgentItems = service.getExpiringItems();
+    final categories = service.getActiveCategories();
+
     return Scaffold(
       backgroundColor: const Color(0xFFF6F8F6),
       body: SafeArea(
@@ -22,91 +29,27 @@ class InsideFridgeScreen extends StatelessWidget {
                   child: ListView(
                     padding: const EdgeInsets.fromLTRB(24, 16, 24, 100),
                     children: [
-                      _buildStatsGrid(),
+                      _buildStatsGrid(stats),
                       const SizedBox(height: 24),
-                      _buildSectionHeader(
-                        'Use Immediately',
-                        'View all',
-                        isUrgent: true,
-                      ),
-                      const SizedBox(height: 12),
-                      _buildUrgentItem(
-                        context,
-                        icon: '🥬',
-                        name: 'Fresh Spinach',
-                        expiry: 'Exp. Today',
-                        detail: 'Packaged Bag (250g)',
-                        progress: 0.95,
-                        color: Colors.red,
-                      ),
-                      const SizedBox(height: 12),
-                      _buildUrgentItem(
-                        context,
-                        icon: '🥛',
-                        name: 'Whole Milk',
-                        expiry: 'Exp. 2 Days',
-                        detail: 'Half Gallon',
-                        progress: 0.8,
-                        color: Colors.orange,
-                      ),
-                      const SizedBox(height: 24),
-                      _buildSectionHeader(
-                        'Dairy & Eggs',
-                        '5 items',
-                        isUrgent: false,
-                      ),
-                      const SizedBox(height: 12),
-                      GridView.count(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        crossAxisCount: 2,
-                        mainAxisSpacing: 12,
-                        crossAxisSpacing: 12,
-                        childAspectRatio: 0.85,
-                        children: [
-                          _buildGridItem(
-                            context,
-                            '🧀',
-                            'Cheddar Block',
-                            'Fresh (7 days)',
-                            0.6,
-                            const Color(0xFF13EC13),
+                      // ── Urgent items ───────────────────────────
+                      if (urgentItems.isNotEmpty) ...[
+                        _buildSectionHeader(
+                          'Use Immediately',
+                          '${urgentItems.length} items',
+                          isUrgent: true,
+                        ),
+                        const SizedBox(height: 12),
+                        ...urgentItems.map(
+                          (item) => Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: _buildUrgentItem(context, item),
                           ),
-                          _buildGridItem(
-                            context,
-                            '🥚',
-                            'Large Eggs',
-                            '10 remaining',
-                            0.85,
-                            const Color(0xFF13EC13),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 24),
-                      _buildSectionHeader(
-                        'Produce',
-                        '8 items',
-                        isUrgent: false,
-                      ),
-                      const SizedBox(height: 12),
-                      _buildListItem(
-                        context,
-                        '🥕',
-                        'Carrots',
-                        'Bag of 6 • Added 3 days ago',
-                        'Good',
-                        0.7,
-                        const Color(0xFF13EC13),
-                      ),
-                      const SizedBox(height: 12),
-                      _buildListItem(
-                        context,
-                        '🥑',
-                        'Avocados',
-                        '2 pcs • Ripe',
-                        'Use Soon',
-                        0.4,
-                        Colors.amber,
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+                      // ── Category sections ──────────────────────
+                      ...categories.map(
+                        (cat) => _buildCategorySection(context, service, cat),
                       ),
                     ],
                   ),
@@ -136,6 +79,102 @@ class InsideFridgeScreen extends StatelessWidget {
       ),
     );
   }
+
+  // ── Category section builder ─────────────────────────────────────
+
+  Widget _buildCategorySection(
+    BuildContext context,
+    FridgeService service,
+    FridgeCategory category,
+  ) {
+    final items = service.getItemsByCategory(category);
+    if (items.isEmpty) return const SizedBox.shrink();
+
+    // Filter out items already shown in urgent section
+    final nonUrgent = items
+        .where(
+          (i) =>
+              i.freshnessStatus != FreshnessStatus.expiringSoon &&
+              i.freshnessStatus != FreshnessStatus.expired,
+        )
+        .toList();
+    if (nonUrgent.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionHeader(
+          category.displayName,
+          '${nonUrgent.length} items',
+          isUrgent: false,
+        ),
+        const SizedBox(height: 12),
+        if (nonUrgent.length <= 4)
+          GridView.count(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            crossAxisCount: 2,
+            mainAxisSpacing: 12,
+            crossAxisSpacing: 12,
+            childAspectRatio: 0.85,
+            children: nonUrgent
+                .map((item) => _buildGridItem(context, item))
+                .toList(),
+          )
+        else
+          ...nonUrgent.map(
+            (item) => Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: _buildListItem(context, item),
+            ),
+          ),
+        const SizedBox(height: 24),
+      ],
+    );
+  }
+
+  // ── Helpers to derive display data from FridgeItem ────────────────
+
+  Color _freshnessColor(FridgeItem item) {
+    switch (item.freshnessStatus) {
+      case FreshnessStatus.fresh:
+        return const Color(0xFF13EC13);
+      case FreshnessStatus.useSoon:
+        return Colors.amber;
+      case FreshnessStatus.expiringSoon:
+        return Colors.orange;
+      case FreshnessStatus.expired:
+        return Colors.red;
+    }
+  }
+
+  double _freshnessProgress(FridgeItem item) {
+    switch (item.freshnessStatus) {
+      case FreshnessStatus.fresh:
+        return 0.3;
+      case FreshnessStatus.useSoon:
+        return 0.55;
+      case FreshnessStatus.expiringSoon:
+        return 0.8;
+      case FreshnessStatus.expired:
+        return 0.95;
+    }
+  }
+
+  String _freshnessLabel(FridgeItem item) {
+    switch (item.freshnessStatus) {
+      case FreshnessStatus.fresh:
+        return 'Fresh';
+      case FreshnessStatus.useSoon:
+        return 'Use Soon';
+      case FreshnessStatus.expiringSoon:
+        return 'Expiring';
+      case FreshnessStatus.expired:
+        return 'Expired';
+    }
+  }
+
+  // ── Reusable widgets (unchanged visuals) ─────────────────────────
 
   Widget _buildHeader(BuildContext context) {
     return FridgeHeader(
@@ -203,7 +242,7 @@ class InsideFridgeScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildStatsGrid() {
+  Widget _buildStatsGrid(Map<String, int> stats) {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       clipBehavior: Clip.none,
@@ -217,7 +256,7 @@ class InsideFridgeScreen extends StatelessWidget {
             badgeColor: Colors.red[100]!,
             badgeTextColor: Colors.red,
             badge: 'Urgent',
-            count: '3',
+            count: '${stats['urgent'] ?? 0}',
             label: 'Expiring soon',
           ),
           const SizedBox(width: 12),
@@ -229,7 +268,7 @@ class InsideFridgeScreen extends StatelessWidget {
             badgeColor: Colors.amber[100]!,
             badgeTextColor: Colors.amber[800]!,
             badge: 'Use Soon',
-            count: '5',
+            count: '${stats['useSoon'] ?? 0}',
             label: 'Use this week',
           ),
           const SizedBox(width: 12),
@@ -241,7 +280,7 @@ class InsideFridgeScreen extends StatelessWidget {
             badgeColor: const Color(0xFF13EC13).withOpacity(0.2),
             badgeTextColor: Colors.green,
             badge: 'Healthy',
-            count: '24',
+            count: '${stats['healthy'] ?? 0}',
             label: 'Total fresh items',
           ),
         ],
@@ -340,15 +379,10 @@ class InsideFridgeScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildUrgentItem(
-    BuildContext context, {
-    required String icon,
-    required String name,
-    required String expiry,
-    required String detail,
-    required double progress,
-    required Color color,
-  }) {
+  Widget _buildUrgentItem(BuildContext context, FridgeItem item) {
+    final color = _freshnessColor(item);
+    final progress = _freshnessProgress(item);
+
     return GestureDetector(
       onTap: () {
         Navigator.pushNamed(context, AppRoutes.foodItemDetails);
@@ -377,7 +411,10 @@ class InsideFridgeScreen extends StatelessWidget {
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Center(
-                child: Text(icon, style: const TextStyle(fontSize: 24)),
+                child: Text(
+                  item.category.emoji,
+                  style: const TextStyle(fontSize: 24),
+                ),
               ),
             ),
             const SizedBox(width: 12),
@@ -388,12 +425,16 @@ class InsideFridgeScreen extends StatelessWidget {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        name,
-                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      Flexible(
+                        child: Text(
+                          item.name,
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
+                      const SizedBox(width: 8),
                       Text(
-                        expiry,
+                        item.expiryDisplayText,
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.bold,
@@ -414,7 +455,7 @@ class InsideFridgeScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    detail,
+                    '${item.notes ?? item.category.label} (${item.amountDisplay})',
                     style: const TextStyle(fontSize: 10, color: Colors.grey),
                   ),
                 ],
@@ -432,14 +473,10 @@ class InsideFridgeScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildGridItem(
-    BuildContext context,
-    String icon,
-    String name,
-    String subtitle,
-    double progress,
-    Color color,
-  ) {
+  Widget _buildGridItem(BuildContext context, FridgeItem item) {
+    final color = _freshnessColor(item);
+    final progress = _freshnessProgress(item);
+
     return GestureDetector(
       onTap: () {
         Navigator.pushNamed(context, AppRoutes.foodItemDetails);
@@ -457,16 +494,24 @@ class InsideFridgeScreen extends StatelessWidget {
             CircleAvatar(
               backgroundColor: Colors.blue[50],
               radius: 24,
-              child: Text(icon, style: const TextStyle(fontSize: 24)),
+              child: Text(
+                item.category.emoji,
+                style: const TextStyle(fontSize: 24),
+              ),
             ),
             const SizedBox(height: 8),
             Text(
-              name,
+              item.name,
               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
-            Text(subtitle, style: TextStyle(fontSize: 10, color: color)),
+            Text(
+              '${_freshnessLabel(item)} (${item.expiryDisplayText})',
+              style: TextStyle(fontSize: 10, color: color),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
             const SizedBox(height: 8),
             ClipRRect(
               borderRadius: BorderRadius.circular(4),
@@ -483,15 +528,10 @@ class InsideFridgeScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildListItem(
-    BuildContext context,
-    String icon,
-    String name,
-    String subtitle,
-    String status,
-    double progress,
-    Color statusColor,
-  ) {
+  Widget _buildListItem(BuildContext context, FridgeItem item) {
+    final color = _freshnessColor(item);
+    final progress = _freshnessProgress(item);
+
     return GestureDetector(
       onTap: () {
         Navigator.pushNamed(context, AppRoutes.foodItemDetails);
@@ -513,7 +553,10 @@ class InsideFridgeScreen extends StatelessWidget {
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Center(
-                child: Text(icon, style: const TextStyle(fontSize: 20)),
+                child: Text(
+                  item.category.emoji,
+                  style: const TextStyle(fontSize: 20),
+                ),
               ),
             ),
             const SizedBox(width: 12),
@@ -522,14 +565,14 @@ class InsideFridgeScreen extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    name,
+                    item.name,
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 14,
                     ),
                   ),
                   Text(
-                    subtitle,
+                    '${item.amountDisplay} • ${item.expiryDisplayText}',
                     style: const TextStyle(fontSize: 10, color: Colors.grey),
                   ),
                 ],
@@ -539,11 +582,11 @@ class InsideFridgeScreen extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  status,
+                  _freshnessLabel(item),
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.bold,
-                    color: statusColor,
+                    color: color,
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -553,7 +596,7 @@ class InsideFridgeScreen extends StatelessWidget {
                     borderRadius: BorderRadius.circular(4),
                     child: LinearProgressIndicator(
                       value: progress,
-                      color: statusColor,
+                      color: color,
                       backgroundColor: Colors.grey[200],
                       minHeight: 4,
                     ),

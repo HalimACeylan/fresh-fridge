@@ -14,7 +14,16 @@ class ReceiptService {
 
   // ── Known category mappings ──────────────────────────────────────
   // Maps common receipt keywords → fridge categories for auto-suggestion.
+  // IMPORTANT: Multi-word keywords must come FIRST so they match before
+  // a single-word substring does (e.g. "ice cream" before "cream",
+  // "orange juice" before "orange").
   static final Map<String, FridgeCategory> _categoryKeywords = {
+    // Multi-word (checked first)
+    'ice cream': FridgeCategory.frozen,
+    'hot sauce': FridgeCategory.condiments,
+    'orange juice': FridgeCategory.beverages,
+    'soy sauce': FridgeCategory.condiments,
+
     // Produce
     'spinach': FridgeCategory.produce,
     'avocado': FridgeCategory.produce,
@@ -77,7 +86,6 @@ class ReceiptService {
     'pesto': FridgeCategory.condiments,
     'vinegar': FridgeCategory.condiments,
     'soy': FridgeCategory.condiments,
-    'hot sauce': FridgeCategory.condiments,
 
     // Grains & Bakery
     'bread': FridgeCategory.grains,
@@ -91,7 +99,6 @@ class ReceiptService {
 
     // Frozen
     'frozen': FridgeCategory.frozen,
-    'ice cream': FridgeCategory.frozen,
     'pizza': FridgeCategory.frozen,
 
     // Snacks

@@ -1,11 +1,50 @@
 import 'package:flutter/material.dart';
+import 'package:fridge_app/models/receipt.dart';
 import 'package:fridge_app/routes.dart';
+import 'package:fridge_app/services/receipt_service.dart';
 
 class RecentScanResultsScreen extends StatelessWidget {
   const RecentScanResultsScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final service = ReceiptService.instance;
+    final receipts = service.getAllReceipts();
+
+    // Show the most recent receipt (or first available)
+    if (receipts.isEmpty) {
+      return Scaffold(
+        backgroundColor: const Color(0xFFF6F8F6),
+        appBar: AppBar(title: const Text('Scan Results')),
+        body: const Center(child: Text('No receipts found')),
+      );
+    }
+
+    final receipt = receipts.first;
+    final recognizedItems = receipt.items.where((i) => !i.isUnknown).toList();
+    final unknownItems = receipt.unknownItems;
+
+    // Format date
+    final months = [
+      'JAN',
+      'FEB',
+      'MAR',
+      'APR',
+      'MAY',
+      'JUN',
+      'JUL',
+      'AUG',
+      'SEP',
+      'OCT',
+      'NOV',
+      'DEC',
+    ];
+    final d = receipt.scanDate;
+    final hour = d.hour > 12 ? d.hour - 12 : d.hour;
+    final amPm = d.hour >= 12 ? 'PM' : 'AM';
+    final dateStr =
+        '${months[d.month - 1]} ${d.day}, ${d.year} • ${hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')} $amPm';
+
     return Scaffold(
       backgroundColor: const Color(0xFFF6F8F6),
       appBar: AppBar(
@@ -14,9 +53,7 @@ class RecentScanResultsScreen extends StatelessWidget {
           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
         ),
         centerTitle: true,
-        backgroundColor: const Color(
-          0xFFAFB2AF,
-        ).withOpacity(0.1), // Approximate color based on HTML backdrop
+        backgroundColor: const Color(0xFFAFB2AF).withOpacity(0.1),
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.black87),
@@ -80,16 +117,16 @@ class RecentScanResultsScreen extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(height: 12),
-                          const Text(
-                            'Whole Foods Market',
-                            style: TextStyle(
+                          Text(
+                            receipt.storeName,
+                            style: const TextStyle(
                               fontSize: 20,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            'OCT 24, 2023 • 10:43 AM',
+                            dateStr,
                             style: TextStyle(
                               fontSize: 12,
                               color: Colors.grey[500],
@@ -104,32 +141,28 @@ class RecentScanResultsScreen extends StatelessWidget {
                       height: 1,
                       thickness: 1,
                       color: Color(0xFFEEEEEE),
-                    ), // Dashed preferred but Divider is ok
-                    // Items
-                    _buildItemRow('Whole Milk (1 Gal)', '1', '\$4.50'),
-                    const Divider(
-                      height: 1,
-                      thickness: 1,
-                      color: Color(0xFFFAFAFA),
                     ),
-                    _buildItemRow(
-                      'Organic Baby Spinach',
-                      '2',
-                      '\$7.98',
-                      hasControls: true,
-                    ),
-                    const Divider(
-                      height: 1,
-                      thickness: 1,
-                      color: Color(0xFFFAFAFA),
-                    ),
-                    _buildItemRow('Large Brown Eggs (12ct)', '1', '\$5.29'),
-                    const Divider(
-                      height: 1,
-                      thickness: 1,
-                      color: Color(0xFFFAFAFA),
-                    ),
-                    _buildUnknownItemRow(),
+                    // Recognized items
+                    ...recognizedItems.asMap().entries.expand((entry) {
+                      final item = entry.value;
+                      return [
+                        _buildItemRow(
+                          item.name,
+                          '${item.quantity}',
+                          '\$${item.totalPrice.toStringAsFixed(2)}',
+                          hasControls: item.quantity > 1,
+                        ),
+                        if (entry.key < recognizedItems.length - 1 ||
+                            unknownItems.isNotEmpty)
+                          const Divider(
+                            height: 1,
+                            thickness: 1,
+                            color: Color(0xFFFAFAFA),
+                          ),
+                      ];
+                    }),
+                    // Unknown items
+                    ...unknownItems.map((item) => _buildUnknownItemRow(item)),
 
                     Padding(
                       padding: const EdgeInsets.all(16),
@@ -157,16 +190,22 @@ class RecentScanResultsScreen extends StatelessWidget {
                       padding: const EdgeInsets.all(24),
                       child: Column(
                         children: [
-                          _buildSummaryRow('Subtotal', '\$17.77'),
+                          _buildSummaryRow(
+                            'Subtotal',
+                            '\$${receipt.subtotal.toStringAsFixed(2)}',
+                          ),
                           const SizedBox(height: 8),
-                          _buildSummaryRow('Tax (est)', '\$1.42'),
+                          _buildSummaryRow(
+                            'Tax (est)',
+                            '\$${receipt.tax.toStringAsFixed(2)}',
+                          ),
                           const SizedBox(height: 12),
                           const Divider(height: 1),
                           const SizedBox(height: 12),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: const [
-                              Text(
+                            children: [
+                              const Text(
                                 'Total',
                                 style: TextStyle(
                                   fontSize: 18,
@@ -174,8 +213,8 @@ class RecentScanResultsScreen extends StatelessWidget {
                                 ),
                               ),
                               Text(
-                                '\$19.19',
-                                style: TextStyle(
+                                '\$${receipt.total.toStringAsFixed(2)}',
+                                style: const TextStyle(
                                   fontSize: 24,
                                   fontWeight: FontWeight.bold,
                                   color: Color(0xFF13EC13),
@@ -226,12 +265,12 @@ class RecentScanResultsScreen extends StatelessWidget {
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
-                  children: const [
-                    Icon(Icons.kitchen),
-                    SizedBox(width: 12),
+                  children: [
+                    const Icon(Icons.kitchen),
+                    const SizedBox(width: 12),
                     Text(
-                      'Add 4 Items to Fridge',
-                      style: TextStyle(
+                      'Add ${receipt.recognizedCount} Items to Fridge',
+                      style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
                       ),
@@ -303,23 +342,29 @@ class RecentScanResultsScreen extends StatelessWidget {
                   child: hasControls
                       ? Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: const [
-                            Icon(
+                          children: [
+                            const Icon(
                               Icons.remove,
                               size: 14,
                               color: Color(0xFF13EC13),
                             ),
                             Text(
-                              '2',
-                              style: TextStyle(fontWeight: FontWeight.bold),
+                              qty,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
-                            Icon(Icons.add, size: 14, color: Color(0xFF13EC13)),
+                            const Icon(
+                              Icons.add,
+                              size: 14,
+                              color: Color(0xFF13EC13),
+                            ),
                           ],
                         )
-                      : const Center(
+                      : Center(
                           child: Text(
-                            '1',
-                            style: TextStyle(fontWeight: FontWeight.bold),
+                            qty,
+                            style: const TextStyle(fontWeight: FontWeight.bold),
                           ),
                         ),
                 ),
@@ -358,7 +403,7 @@ class RecentScanResultsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildUnknownItemRow() {
+  Widget _buildUnknownItemRow(ReceiptItem item) {
     return Container(
       color: const Color(0xFFFEFCE8),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -369,8 +414,8 @@ class RecentScanResultsScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: const [
+                const Row(
+                  children: [
                     Text(
                       'Please Verify',
                       style: TextStyle(
@@ -394,22 +439,24 @@ class RecentScanResultsScreen extends StatelessWidget {
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(color: Colors.orange.withOpacity(0.5)),
                   ),
-                  child: const Text(
-                    'Unkwn Item #44',
-                    style: TextStyle(fontWeight: FontWeight.w500),
+                  child: Text(
+                    item.name,
+                    style: const TextStyle(fontWeight: FontWeight.w500),
                   ),
                 ),
               ],
             ),
           ),
           const SizedBox(width: 8),
-          // ... similar structure for qty/price but simplistic for now
           SizedBox(
             width: 40,
             child: Padding(
               padding: const EdgeInsets.only(top: 24),
               child: Center(
-                child: Text('1', style: TextStyle(fontWeight: FontWeight.bold)),
+                child: Text(
+                  '${item.quantity}',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
               ),
             ),
           ),
@@ -419,8 +466,10 @@ class RecentScanResultsScreen extends StatelessWidget {
             child: Padding(
               padding: const EdgeInsets.only(top: 24),
               child: Text(
-                '\$??.??',
-                style: TextStyle(
+                item.totalPrice > 0
+                    ? '\$${item.totalPrice.toStringAsFixed(2)}'
+                    : '\$??.??',
+                style: const TextStyle(
                   fontWeight: FontWeight.bold,
                   fontFamily: 'monospace',
                 ),
