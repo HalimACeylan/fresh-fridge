@@ -16,7 +16,7 @@ class SuggestedRecipesScreen extends StatelessWidget {
           children: [
             Column(
               children: [
-                _buildHeader(),
+                _buildHeader(context),
                 _buildFilters(),
                 Expanded(
                   child: ListView(
@@ -92,30 +92,35 @@ class SuggestedRecipesScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildHeader() {
+  Widget _buildHeader(BuildContext context) {
     return FridgeHeader(
       superTitle: 'BASED ON YOUR FRIDGE',
       title: 'Suggested Recipes',
-      trailing: Stack(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            child: const Icon(Icons.kitchen_outlined, color: Colors.grey),
-          ),
-          Positioned(
-            top: 4,
-            right: 4,
-            child: Container(
-              width: 10,
-              height: 10,
-              decoration: BoxDecoration(
-                color: const Color(0xFF13EC13),
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white, width: 2),
+      trailing: GestureDetector(
+        onTap: () {
+          Navigator.pushNamed(context, AppRoutes.fridgeGrid);
+        },
+        child: Stack(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              child: const Icon(Icons.kitchen_outlined, color: Colors.grey),
+            ),
+            Positioned(
+              top: 4,
+              right: 4,
+              child: Container(
+                width: 10,
+                height: 10,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF13EC13),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 2),
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

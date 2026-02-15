@@ -16,7 +16,7 @@ class InsideFridgeScreen extends StatelessWidget {
           children: [
             Column(
               children: [
-                _buildHeader(),
+                _buildHeader(context),
                 _buildSearchBar(),
                 Expanded(
                   child: ListView(
@@ -137,19 +137,34 @@ class InsideFridgeScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildHeader() {
+  Widget _buildHeader(BuildContext context) {
     return FridgeHeader(
       title: 'Inside My Fridge',
       subtitle: 'Inventory Management',
-      trailing: Container(
-        padding: const EdgeInsets.all(2),
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          border: Border.all(color: const Color(0xFF13EC13), width: 2),
-        ),
-        child: const CircleAvatar(
-          backgroundImage: AssetImage('assets/images/user_profile.png'),
-          radius: 20,
+      trailing: GestureDetector(
+        onTap: () {
+          Navigator.pushNamed(context, AppRoutes.fridgeGrid);
+        },
+        child: Stack(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              child: const Icon(Icons.kitchen_outlined, color: Colors.grey),
+            ),
+            Positioned(
+              top: 4,
+              right: 4,
+              child: Container(
+                width: 10,
+                height: 10,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF13EC13),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 2),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
