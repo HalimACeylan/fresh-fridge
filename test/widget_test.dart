@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fridge_app/main.dart';
 import 'package:fridge_app/screens/welcome_login_screen.dart';
