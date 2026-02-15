@@ -38,7 +38,7 @@ class FridgeBottomNavigation extends StatelessWidget {
             Icons.kitchen_outlined,
             'Fridge',
             FridgeTab.fridge,
-            AppRoutes.insideFridge,
+            AppRoutes.fridgeGrid,
           ),
           _buildNavItem(
             context,

@@ -86,18 +86,6 @@ class SuggestedRecipesScreen extends StatelessWidget {
               right: 0,
               child: _buildBottomNav(context),
             ),
-            Positioned(
-              bottom: 90,
-              right: 24,
-              child: FloatingActionButton(
-                onPressed: () {
-                  Navigator.pushNamed(context, AppRoutes.fridgeGrid);
-                },
-                backgroundColor: Colors
-                    .black, // Different accent here based on HTML? HTML has black bg for FAB on screen 3
-                child: const Icon(Icons.add, color: Color(0xFF13EC13)),
-              ),
-            ),
           ],
         ),
       ),
