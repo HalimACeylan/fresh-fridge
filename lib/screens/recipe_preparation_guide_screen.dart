@@ -1,11 +1,36 @@
 import 'package:flutter/material.dart';
+import 'package:fridge_app/models/recipe.dart'; // Import Recipe model
 import 'package:fridge_app/routes.dart';
+import 'package:fridge_app/services/fridge_service.dart'; // Import FridgeService for inventory check
 
 class RecipePreparationGuideScreen extends StatelessWidget {
   const RecipePreparationGuideScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
+    // Get recipe from arguments
+    final recipe = ModalRoute.of(context)!.settings.arguments as Recipe;
+
+    // Calculate in-fridge status for ingredients
+    final fridgeItems = FridgeService.instance.getAllItems();
+    final fridgeItemNames = fridgeItems
+        .map((i) => i.name.toLowerCase())
+        .toSet();
+
+    // Helper to check if ingredient is in fridge
+    bool isInFridge(String ingredientName) {
+      final nameLower = ingredientName.toLowerCase();
+      // Simple containment check
+      return fridgeItemNames.any(
+        (fridgeName) =>
+            fridgeName.contains(nameLower) || nameLower.contains(fridgeName),
+      );
+    }
+
+    final ingredientsInFridgeCount = recipe.ingredients
+        .where((i) => isInFridge(i.name))
+        .length;
+
     return Scaffold(
       backgroundColor: const Color(0xFFF6F8F6),
       body: Stack(
@@ -60,10 +85,24 @@ class RecipePreparationGuideScreen extends StatelessWidget {
                   background: Stack(
                     fit: StackFit.expand,
                     children: [
-                      Image.network(
-                        'https://lh3.googleusercontent.com/aida-public/AB6AXuDEZ9BG0PoFgOCOOvHCcEQalnxwd9oPMILGyry_3HggvsmxwD0zOrSeBJ_aiw4PA1TBaiTf0aP7drfBV0RXKAvqUKIc5H_HtJz3XBgGvugISglFqG4JUcPjEQuVXR1DAVExUwoQG13HoxXmMHNfqyetXRSqBeSt02NmN7lpJyMCwsDm2REK6L0Q7Kpk21mYUWO1wUFbOWM8RU5ZjZ5BdOGfmUxJ-qvGW-BYfOdkdysSTInL_Z_q5xJJQCSC8QbLFcKC4YfmgTzl-tVS',
-                        fit: BoxFit.cover,
-                      ),
+                      if (recipe.imageUrl != null &&
+                          recipe.imageUrl!.startsWith('http'))
+                        Image.network(
+                          recipe.imageUrl!,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) =>
+                              Container(color: Colors.grey[800]),
+                        )
+                      else if (recipe.imageUrl != null)
+                        Image.asset(
+                          recipe.imageUrl!,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) =>
+                              Container(color: Colors.grey[800]),
+                        )
+                      else
+                        Container(color: Colors.grey[800]),
+
                       Container(
                         decoration: BoxDecoration(
                           gradient: LinearGradient(
@@ -85,50 +124,52 @@ class RecipePreparationGuideScreen extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF13EC13),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: const Text(
-                                'VEGETARIAN',
-                                style: TextStyle(
-                                  color: Colors.black,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 10,
+                            if (recipe.tags.isNotEmpty)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF13EC13),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  recipe.tags.first.toUpperCase(),
+                                  style: const TextStyle(
+                                    color: Colors.black,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 10,
+                                  ),
                                 ),
                               ),
-                            ),
                             const SizedBox(height: 8),
-                            const Text(
-                              'Creamy Basil Pesto Pasta',
-                              style: TextStyle(
+                            Text(
+                              recipe.title,
+                              style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 28,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
                             const SizedBox(height: 12),
-                            const Row(
+                            Row(
                               children: [
                                 _HeaderInfoItem(
                                   icon: Icons.schedule,
-                                  text: '25 min',
+                                  text: recipe.prepTime,
                                 ),
-                                SizedBox(width: 16),
+                                const SizedBox(width: 16),
                                 _HeaderInfoItem(
                                   icon: Icons.restaurant,
-                                  text: '4 Servings',
+                                  text: '${recipe.servings} Servings',
                                 ),
-                                SizedBox(width: 16),
-                                _HeaderInfoItem(
-                                  icon: Icons.local_fire_department,
-                                  text: '420 kcal',
-                                ),
+                                const SizedBox(width: 16),
+                                if (recipe.calories.isNotEmpty)
+                                  _HeaderInfoItem(
+                                    icon: Icons.local_fire_department,
+                                    text: recipe.calories,
+                                  ),
                               ],
                             ),
                           ],
@@ -195,9 +236,9 @@ class RecipePreparationGuideScreen extends StatelessWidget {
                                       ).withOpacity(0.1),
                                       borderRadius: BorderRadius.circular(4),
                                     ),
-                                    child: const Text(
-                                      '5/7 In Fridge',
-                                      style: TextStyle(
+                                    child: Text(
+                                      '$ingredientsInFridgeCount/${recipe.ingredients.length} In Fridge',
+                                      style: const TextStyle(
                                         color: Color(0xFF102210),
                                         fontWeight: FontWeight.bold,
                                         fontSize: 12,
@@ -207,36 +248,17 @@ class RecipePreparationGuideScreen extends StatelessWidget {
                                 ],
                               ),
                               const SizedBox(height: 16),
-                              const _IngredientItem(
-                                name: 'Fresh Basil',
-                                amount: '2 cups, packed',
-                                inFridge: true,
-                              ),
-                              const SizedBox(height: 12),
-                              const _IngredientItem(
-                                name: 'Parmesan Cheese',
-                                amount: '1/2 cup, grated',
-                                inFridge: true,
-                              ),
-                              const SizedBox(height: 12),
-                              const _IngredientItem(
-                                name: 'Pine Nuts',
-                                amount: '1/3 cup',
-                                inFridge: false,
-                              ),
-                              const SizedBox(height: 12),
-                              const _IngredientItem(
-                                name: 'Garlic Cloves',
-                                amount: '3 large cloves',
-                                inFridge: true,
-                              ),
-                              const SizedBox(height: 12),
-                              const _IngredientItem(
-                                name: 'Extra Virgin Olive Oil',
-                                amount: '1/2 cup',
-                                inFridge: false,
-                              ),
-                              const SizedBox(height: 16),
+                              ...recipe.ingredients.map((ingredient) {
+                                return Padding(
+                                  padding: const EdgeInsets.only(bottom: 12.0),
+                                  child: _IngredientItem(
+                                    name: ingredient.name,
+                                    amount: ingredient.amount,
+                                    inFridge: isInFridge(ingredient.name),
+                                  ),
+                                );
+                              }),
+                              const SizedBox(height: 4),
                               Center(
                                 child: TextButton.icon(
                                   onPressed: () {
@@ -271,29 +293,22 @@ class RecipePreparationGuideScreen extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: 16),
-                        const _InstructionStep(
-                          stepNumber: 1,
-                          title: 'Toast the nuts',
-                          description:
-                              'In a small skillet over medium-low heat, toast the pine nuts, stirring often, until fragrant and golden, about 3 to 5 minutes. Watch carefully so they don\'t burn.',
-                          imageUrl:
-                              'https://lh3.googleusercontent.com/aida-public/AB6AXuCAalnXGC0OWdAThN8GDvz_vgIhgPcQDu4ik0hheIJNZ4WZMY2cHi79JYS5lRIn5sQq6pmSemf9iasEjr7qc5VZm3oMOFvg7NyBHhAuP4OXNEZe9YBzx-j2MG12XViLP7WNROCYny7RW21NWztR1gGJClAvZH9woQYj_8ojBnzA3ZHXUyD6LOHNimDpUCLht6Feb7CZ9SIWYT9ci5MOkLVqNOPuMIq1tDtEOTHYUqdL46fqfd34I7Yyxd0zRB77E8_4qjH98e61yZBG',
-                        ),
-                        const _InstructionStep(
-                          stepNumber: 2,
-                          title: 'Blend ingredients',
-                          description:
-                              'Combine basil, garlic, and cooled pine nuts in a food processor. Pulse a few times until coarsely chopped.',
-                          imageUrl:
-                              'https://lh3.googleusercontent.com/aida-public/AB6AXuAnDt84rtHEOSWF9ZG8IQ8BAijqrzEiAkSzuGwMhgAuBITyQFhDQgJ1FT6ZRLd8p_a1ntid_uhrsW2arhlbXkSvd8vIlXqhgupDnp_amh2lNvTxHroMJ2JAX0xccJqHZ8WRSAjOd3uTkNWOY-_PLGNA-7RR85YNkaXzM1wBIWdtrTwseqBp1u5uphVImHnScdtvT7oMpyPOV2UCAoKTN7kIyfjLHj4L6TJKYU5RzlSK54RVI3H3yvMjxB3x1ulmcEvyo5aC1RPddDlo',
-                        ),
-                        const _InstructionStep(
-                          stepNumber: 3,
-                          title: 'Add oil and cheese',
-                          description:
-                              'With the motor running, slowly stream in the olive oil. Add the parmesan cheese and pulse just until combined. Season with salt and pepper to taste.',
-                          isLast: true,
-                        ),
+                        if (recipe.steps.isNotEmpty)
+                          ...recipe.steps.map(
+                            (step) => _InstructionStep(
+                              stepNumber: step.stepNumber,
+                              title: step.title,
+                              description: step.description,
+                              imageUrl: step.imageUrl,
+                              isLast: step == recipe.steps.last,
+                            ),
+                          )
+                        else
+                          const Text(
+                            'No instructions available.',
+                            style: TextStyle(color: Colors.grey),
+                          ),
+
                         const SizedBox(
                           height: 100,
                         ), // Space for floating footer
@@ -352,23 +367,24 @@ class RecipePreparationGuideScreen extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: 12),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: const Text(
-                        '25:00',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
+                    if (recipe.prepTime.isNotEmpty)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          recipe.prepTime,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
-                    ),
                   ],
                 ),
               ),

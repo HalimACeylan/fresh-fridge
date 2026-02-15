@@ -1,10 +1,31 @@
 import 'package:flutter/material.dart';
+import 'package:fridge_app/models/recipe.dart'; // Import Recipe model
 import 'package:fridge_app/routes.dart';
+import 'package:fridge_app/services/recipe_service.dart'; // Import RecipeService
 import 'package:fridge_app/widgets/fridge_bottom_navigation.dart';
 import 'package:fridge_app/widgets/fridge_header.dart';
 
-class SuggestedRecipesScreen extends StatelessWidget {
+class SuggestedRecipesScreen extends StatefulWidget {
   const SuggestedRecipesScreen({super.key});
+
+  @override
+  State<SuggestedRecipesScreen> createState() => _SuggestedRecipesScreenState();
+}
+
+class _SuggestedRecipesScreenState extends State<SuggestedRecipesScreen> {
+  late List<Recipe> _recipes;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRecipes();
+  }
+
+  void _loadRecipes() {
+    setState(() {
+      _recipes = RecipeService.instance.getSuggestedRecipes();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -19,66 +40,29 @@ class SuggestedRecipesScreen extends StatelessWidget {
                 _buildHeader(context),
                 _buildFilters(),
                 Expanded(
-                  child: ListView(
+                  child: ListView.separated(
                     padding: const EdgeInsets.fromLTRB(24, 0, 24, 100),
-                    children: [
-                      _buildRecipeCard(
-                        context,
-                        title: 'Fresh Basil Pesto Pasta',
-                        description:
-                            'A quick and aromatic pasta dish utilizing that fresh basil sitting in your crisper drawer. Perfect for a light dinner.',
-                        imagePath: 'assets/images/pesto_pasta.png',
-                        rating: 4.8,
-                        time: '15 min',
-                        kcal: '420 kcal',
-                        type: 'Italian',
-                        missingItems: [],
-                      ),
-                      const SizedBox(height: 24),
-                      _buildRecipeCard(
-                        context,
-                        title: 'Spicy Chicken Stir-fry',
-                        description: '',
-                        imagePath: 'assets/images/chicken_stir_fry.png',
-                        rating: 4.5,
-                        time: '30 min',
-                        kcal: '550 kcal',
-                        type: '',
-                        missingItems: ['Soy Sauce'],
-                      ),
-                      const SizedBox(height: 24),
-                      _buildRecipeCard(
-                        context,
-                        title: 'Avocado & Kale Salad',
-                        description:
-                            'A fresh and healthy salad to use up your avocados and kale. Light, nutritious, and ready in minutes.',
-                        imagePath: 'assets/images/avocado_salad.png',
-                        rating: 4.6,
-                        time: '10 min',
-                        kcal: '280 kcal',
-                        type: 'Salad',
-                        missingItems: ['Dressing'],
-                      ),
-                      const SizedBox(height: 24),
-                      _buildRecipeCard(
-                        context,
-                        title: 'Homemade Flatbread Pizza',
-                        description: '',
-                        imagePath: 'assets/images/pizza.png',
-                        rating: 4.9,
-                        time: '25 min',
-                        kcal: '600 kcal',
-                        type: '',
-                        missingItems: [],
-                      ),
-                      const SizedBox(height: 32),
-                      const Center(
-                        child: Text(
-                          'Showing top matches for your inventory.',
-                          style: TextStyle(color: Colors.grey, fontSize: 14),
-                        ),
-                      ),
-                    ],
+                    itemCount: _recipes.length + 1, // +1 for footer text
+                    separatorBuilder: (context, index) =>
+                        const SizedBox(height: 24),
+                    itemBuilder: (context, index) {
+                      if (index == _recipes.length) {
+                        return const Center(
+                          child: Padding(
+                            padding: EdgeInsets.only(top: 8.0),
+                            child: Text(
+                              'Showing top matches for your inventory.',
+                              style: TextStyle(
+                                color: Colors.grey,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ),
+                        );
+                      }
+                      final recipe = _recipes[index];
+                      return _buildRecipeCard(context, recipe);
+                    },
                   ),
                 ),
               ],
@@ -177,20 +161,14 @@ class SuggestedRecipesScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildRecipeCard(
-    BuildContext context, {
-    required String title,
-    required String description,
-    required String imagePath,
-    required double rating,
-    required String time,
-    required String kcal,
-    required String type,
-    required List<String> missingItems,
-  }) {
+  Widget _buildRecipeCard(BuildContext context, Recipe recipe) {
     return GestureDetector(
       onTap: () {
-        Navigator.pushNamed(context, AppRoutes.recipePreparation);
+        Navigator.pushNamed(
+          context,
+          AppRoutes.recipePreparation,
+          arguments: recipe, // Pass recipe object
+        );
       },
       child: Container(
         decoration: BoxDecoration(
@@ -210,12 +188,38 @@ class SuggestedRecipesScreen extends StatelessWidget {
           children: [
             Stack(
               children: [
-                Image.asset(
-                  imagePath,
-                  height: 220,
-                  width: double.infinity,
-                  fit: BoxFit.cover,
-                ),
+                if (recipe.imageUrl != null &&
+                    recipe.imageUrl!.startsWith('http'))
+                  Image.network(
+                    recipe.imageUrl!,
+                    height: 220,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(
+                      height: 220,
+                      color: Colors.grey[300],
+                      child: const Icon(Icons.broken_image),
+                    ),
+                  )
+                else if (recipe.imageUrl != null)
+                  Image.asset(
+                    recipe.imageUrl!,
+                    height: 220,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(
+                      height: 220,
+                      color: Colors.grey[300],
+                      child: const Icon(Icons.broken_image),
+                    ),
+                  )
+                else
+                  Container(
+                    height: 220,
+                    color: Colors.grey[300],
+                    child: const Icon(Icons.image),
+                  ),
+
                 Positioned(
                   top: 12,
                   right: 12,
@@ -241,7 +245,7 @@ class SuggestedRecipesScreen extends StatelessWidget {
                       vertical: 6,
                     ),
                     decoration: BoxDecoration(
-                      color: missingItems.isEmpty
+                      color: recipe.missingIngredients.isEmpty
                           ? const Color(0xFF13EC13)
                           : Colors.white,
                       borderRadius: BorderRadius.circular(8),
@@ -253,25 +257,28 @@ class SuggestedRecipesScreen extends StatelessWidget {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(
-                          missingItems.isEmpty
+                          recipe.missingIngredients.isEmpty
                               ? Icons.check_circle
                               : Icons.warning,
                           size: 16,
-                          color: missingItems.isEmpty
+                          color: recipe.missingIngredients.isEmpty
                               ? Colors.black
                               : Colors.orange,
                         ),
                         const SizedBox(width: 4),
-                        Text(
-                          missingItems.isEmpty
-                              ? 'You have all ingredients'
-                              : 'Missing ${missingItems.length} item: ${missingItems.join(", ")}',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: missingItems.isEmpty
-                                ? Colors.black
-                                : Colors.grey[700],
+                        Flexible(
+                          child: Text(
+                            recipe.missingIngredients.isEmpty
+                                ? 'You have all ingredients'
+                                : 'Missing ${recipe.missingIngredients.length} item: ${recipe.missingIngredients.join(", ")}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: recipe.missingIngredients.isEmpty
+                                  ? Colors.black
+                                  : Colors.grey[700],
+                            ),
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       ],
@@ -291,7 +298,7 @@ class SuggestedRecipesScreen extends StatelessWidget {
                     children: [
                       Expanded(
                         child: Text(
-                          title,
+                          recipe.title,
                           style: const TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
@@ -303,7 +310,7 @@ class SuggestedRecipesScreen extends StatelessWidget {
                           const Icon(Icons.star, color: Colors.amber, size: 20),
                           const SizedBox(width: 4),
                           Text(
-                            '$rating',
+                            '${recipe.rating}',
                             style: const TextStyle(
                               fontWeight: FontWeight.bold,
                               color: Colors.amber,
@@ -313,10 +320,10 @@ class SuggestedRecipesScreen extends StatelessWidget {
                       ),
                     ],
                   ),
-                  if (description.isNotEmpty) ...[
+                  if (recipe.description.isNotEmpty) ...[
                     const SizedBox(height: 8),
                     Text(
-                      description,
+                      recipe.description,
                       style: TextStyle(color: Colors.grey[500], fontSize: 14),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
@@ -325,14 +332,17 @@ class SuggestedRecipesScreen extends StatelessWidget {
                   const SizedBox(height: 16),
                   Row(
                     children: [
-                      _buildIconText(Icons.schedule, time),
+                      _buildIconText(Icons.schedule, recipe.prepTime),
                       const SizedBox(width: 24),
-                      if (kcal.isNotEmpty) ...[
-                        _buildIconText(Icons.local_fire_department, kcal),
+                      if (recipe.calories.isNotEmpty) ...[
+                        _buildIconText(
+                          Icons.local_fire_department,
+                          recipe.calories,
+                        ),
                         const SizedBox(width: 24),
                       ],
-                      if (type.isNotEmpty)
-                        _buildIconText(Icons.restaurant_menu, type),
+                      if (recipe.type.isNotEmpty)
+                        _buildIconText(Icons.restaurant_menu, recipe.type),
                     ],
                   ),
                 ],

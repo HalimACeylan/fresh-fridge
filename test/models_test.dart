@@ -248,7 +248,11 @@ void main() {
       const recipe = Recipe(
         id: 'rec_1',
         title: 'Salad',
-        ingredients: ['lettuce', 'tomato', 'cucumber'],
+        ingredients: [
+          RecipeIngredient(name: 'lettuce', amount: '1'),
+          RecipeIngredient(name: 'tomato', amount: '1'),
+          RecipeIngredient(name: 'cucumber', amount: '1'),
+        ],
         missingIngredients: [],
       );
       expect(recipe.hasAllIngredients, true);
@@ -259,7 +263,12 @@ void main() {
       const recipe = Recipe(
         id: 'rec_2',
         title: 'Pasta',
-        ingredients: ['pasta', 'sauce', 'cheese', 'basil'],
+        ingredients: [
+          RecipeIngredient(name: 'pasta', amount: '1'),
+          RecipeIngredient(name: 'sauce', amount: '1'),
+          RecipeIngredient(name: 'cheese', amount: '1'),
+          RecipeIngredient(name: 'basil', amount: '1'),
+        ],
         missingIngredients: ['basil'],
       );
       expect(recipe.hasAllIngredients, false);
@@ -275,7 +284,11 @@ void main() {
         prepTime: '5 min',
         calories: '180 kcal',
         type: 'Drink',
-        ingredients: ['berries', 'yogurt', 'banana'],
+        ingredients: [
+          RecipeIngredient(name: 'berries', amount: '1 cup'),
+          RecipeIngredient(name: 'yogurt', amount: '1 cup'),
+          RecipeIngredient(name: 'banana', amount: '1'),
+        ],
         missingIngredients: ['banana'],
       );
 

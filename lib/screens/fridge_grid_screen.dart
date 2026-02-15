@@ -205,7 +205,11 @@ class _FridgeGridScreenState extends State<FridgeGridScreen> {
 
     return GestureDetector(
       onTap: () {
-        Navigator.pushNamed(context, AppRoutes.foodItemDetails);
+        Navigator.pushNamed(
+          context,
+          AppRoutes.foodItemDetails,
+          arguments: item,
+        );
       },
       child: Container(
         decoration: BoxDecoration(

@@ -385,7 +385,11 @@ class InsideFridgeScreen extends StatelessWidget {
 
     return GestureDetector(
       onTap: () {
-        Navigator.pushNamed(context, AppRoutes.foodItemDetails);
+        Navigator.pushNamed(
+          context,
+          AppRoutes.foodItemDetails,
+          arguments: item,
+        );
       },
       child: Container(
         padding: const EdgeInsets.all(12),
@@ -479,7 +483,11 @@ class InsideFridgeScreen extends StatelessWidget {
 
     return GestureDetector(
       onTap: () {
-        Navigator.pushNamed(context, AppRoutes.foodItemDetails);
+        Navigator.pushNamed(
+          context,
+          AppRoutes.foodItemDetails,
+          arguments: item,
+        );
       },
       child: Container(
         padding: const EdgeInsets.all(12),
@@ -534,7 +542,11 @@ class InsideFridgeScreen extends StatelessWidget {
 
     return GestureDetector(
       onTap: () {
-        Navigator.pushNamed(context, AppRoutes.foodItemDetails);
+        Navigator.pushNamed(
+          context,
+          AppRoutes.foodItemDetails,
+          arguments: item,
+        );
       },
       child: Container(
         padding: const EdgeInsets.all(12),
