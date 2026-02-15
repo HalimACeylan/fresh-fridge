@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:fridge_app/routes.dart';
+import 'package:fridge_app/widgets/fridge_bottom_navigation.dart';
+import 'package:fridge_app/widgets/fridge_header.dart';
 
 class InsideFridgeScreen extends StatelessWidget {
   const InsideFridgeScreen({super.key});
@@ -29,6 +31,7 @@ class InsideFridgeScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 12),
                       _buildUrgentItem(
+                        context,
                         icon: '🥬',
                         name: 'Fresh Spinach',
                         expiry: 'Exp. Today',
@@ -38,6 +41,7 @@ class InsideFridgeScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 12),
                       _buildUrgentItem(
+                        context,
                         icon: '🥛',
                         name: 'Whole Milk',
                         expiry: 'Exp. 2 Days',
@@ -61,6 +65,7 @@ class InsideFridgeScreen extends StatelessWidget {
                         childAspectRatio: 0.85,
                         children: [
                           _buildGridItem(
+                            context,
                             '🧀',
                             'Cheddar Block',
                             'Fresh (7 days)',
@@ -68,6 +73,7 @@ class InsideFridgeScreen extends StatelessWidget {
                             const Color(0xFF13EC13),
                           ),
                           _buildGridItem(
+                            context,
                             '🥚',
                             'Large Eggs',
                             '10 remaining',
@@ -84,6 +90,7 @@ class InsideFridgeScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 12),
                       _buildListItem(
+                        context,
                         '🥕',
                         'Carrots',
                         'Bag of 6 • Added 3 days ago',
@@ -93,6 +100,7 @@ class InsideFridgeScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 12),
                       _buildListItem(
+                        context,
                         '🥑',
                         'Avocados',
                         '2 pcs • Ripe',
@@ -116,7 +124,9 @@ class InsideFridgeScreen extends StatelessWidget {
               bottom: 90, // Adjusted for bottom nav height
               right: 24,
               child: FloatingActionButton(
-                onPressed: () {},
+                onPressed: () {
+                  Navigator.pushNamed(context, AppRoutes.scanReceipt);
+                },
                 backgroundColor: const Color(0xFF13EC13),
                 child: const Icon(Icons.add, color: Colors.white),
               ),
@@ -128,36 +138,19 @@ class InsideFridgeScreen extends StatelessWidget {
   }
 
   Widget _buildHeader() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          const Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Inside My Fridge',
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-              ),
-              Text(
-                'Inventory Management',
-                style: TextStyle(color: Colors.grey, fontSize: 14),
-              ),
-            ],
-          ),
-          Container(
-            padding: const EdgeInsets.all(2),
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(color: const Color(0xFF13EC13), width: 2),
-            ),
-            child: const CircleAvatar(
-              backgroundImage: AssetImage('assets/images/user_profile.png'),
-              radius: 20,
-            ),
-          ),
-        ],
+    return FridgeHeader(
+      title: 'Inside My Fridge',
+      subtitle: 'Inventory Management',
+      trailing: Container(
+        padding: const EdgeInsets.all(2),
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(color: const Color(0xFF13EC13), width: 2),
+        ),
+        child: const CircleAvatar(
+          backgroundImage: AssetImage('assets/images/user_profile.png'),
+          radius: 20,
+        ),
       ),
     );
   }
@@ -348,7 +341,8 @@ class InsideFridgeScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildUrgentItem({
+  Widget _buildUrgentItem(
+    BuildContext context, {
     required String icon,
     required String name,
     required String expiry,
@@ -356,128 +350,142 @@ class InsideFridgeScreen extends StatelessWidget {
     required double progress,
     required Color color,
   }) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border(left: BorderSide(color: color, width: 4)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: Colors.grey[100],
-              borderRadius: BorderRadius.circular(12),
+    return GestureDetector(
+      onTap: () {
+        Navigator.pushNamed(context, AppRoutes.foodItemDetails);
+      },
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border(left: BorderSide(color: color, width: 4)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 4,
+              offset: const Offset(0, 2),
             ),
-            child: Center(
-              child: Text(icon, style: const TextStyle(fontSize: 24)),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Center(
+                child: Text(icon, style: const TextStyle(fontSize: 24)),
+              ),
             ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      name,
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    Text(
-                      expiry,
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                        color: color,
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        name,
+                        style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
-                  child: LinearProgressIndicator(
-                    value: progress,
-                    color: color,
-                    backgroundColor: Colors.grey[200],
-                    minHeight: 6,
+                      Text(
+                        expiry,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: color,
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  detail,
-                  style: const TextStyle(fontSize: 10, color: Colors.grey),
-                ),
-              ],
+                  const SizedBox(height: 6),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: LinearProgressIndicator(
+                      value: progress,
+                      color: color,
+                      backgroundColor: Colors.grey[200],
+                      minHeight: 6,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    detail,
+                    style: const TextStyle(fontSize: 10, color: Colors.grey),
+                  ),
+                ],
+              ),
             ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.delete_outline, color: Colors.grey),
-            onPressed: () {},
-          ),
-        ],
+            IconButton(
+              icon: const Icon(Icons.delete_outline, color: Colors.grey),
+              onPressed: () {
+                // Delete action placeholder
+              },
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildGridItem(
+    BuildContext context,
     String icon,
     String name,
     String subtitle,
     double progress,
     Color color,
   ) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey[200]!),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          CircleAvatar(
-            backgroundColor: Colors.blue[50],
-            radius: 24,
-            child: Text(icon, style: const TextStyle(fontSize: 24)),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            name,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          Text(subtitle, style: TextStyle(fontSize: 10, color: color)),
-          const SizedBox(height: 8),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(
-              value: progress,
-              color: color,
-              backgroundColor: Colors.grey[200],
-              minHeight: 4,
+    return GestureDetector(
+      onTap: () {
+        Navigator.pushNamed(context, AppRoutes.foodItemDetails);
+      },
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.grey[200]!),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircleAvatar(
+              backgroundColor: Colors.blue[50],
+              radius: 24,
+              child: Text(icon, style: const TextStyle(fontSize: 24)),
             ),
-          ),
-        ],
+            const SizedBox(height: 8),
+            Text(
+              name,
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            Text(subtitle, style: TextStyle(fontSize: 10, color: color)),
+            const SizedBox(height: 8),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: progress,
+                color: color,
+                backgroundColor: Colors.grey[200],
+                minHeight: 4,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildListItem(
+    BuildContext context,
     String icon,
     String name,
     String subtitle,
@@ -485,155 +493,82 @@ class InsideFridgeScreen extends StatelessWidget {
     double progress,
     Color statusColor,
   ) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey[200]!),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: Colors.green[50],
-              borderRadius: BorderRadius.circular(12),
+    return GestureDetector(
+      onTap: () {
+        Navigator.pushNamed(context, AppRoutes.foodItemDetails);
+      },
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.grey[200]!),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: Colors.green[50],
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Center(
+                child: Text(icon, style: const TextStyle(fontSize: 20)),
+              ),
             ),
-            child: Center(
-              child: Text(icon, style: const TextStyle(fontSize: 20)),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    name,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
+                  ),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(fontSize: 10, color: Colors.grey),
+                  ),
+                ],
+              ),
             ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  name,
-                  style: const TextStyle(
+                  status,
+                  style: TextStyle(
+                    fontSize: 12,
                     fontWeight: FontWeight.bold,
-                    fontSize: 14,
+                    color: statusColor,
                   ),
                 ),
-                Text(
-                  subtitle,
-                  style: const TextStyle(fontSize: 10, color: Colors.grey),
+                const SizedBox(height: 4),
+                SizedBox(
+                  width: 48,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: LinearProgressIndicator(
+                      value: progress,
+                      color: statusColor,
+                      backgroundColor: Colors.grey[200],
+                      minHeight: 4,
+                    ),
+                  ),
                 ),
               ],
             ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                status,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: statusColor,
-                ),
-              ),
-              const SizedBox(height: 4),
-              SizedBox(
-                width: 48,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
-                  child: LinearProgressIndicator(
-                    value: progress,
-                    color: statusColor,
-                    backgroundColor: Colors.grey[200],
-                    minHeight: 4,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildBottomNav(BuildContext context) {
-    return Container(
-      height: 80,
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black12,
-            blurRadius: 20,
-            offset: Offset(0, -5),
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _buildNavItem(
-            context,
-            Icons.kitchen,
-            'Fridge',
-            true,
-            AppRoutes.insideFridge,
-          ),
-          _buildNavItem(
-            context,
-            Icons.restaurant_menu,
-            'Recipes',
-            false,
-            AppRoutes.suggestedRecipes,
-          ),
-          const SizedBox(width: 48), // Space for FAB
-          _buildNavItem(
-            context,
-            Icons.receipt_long,
-            'Shopping',
-            false,
-            AppRoutes.scanReceipt,
-          ),
-          _buildNavItem(
-            context,
-            Icons.person_outline,
-            'Profile',
-            false,
-            AppRoutes.homeManagerAdmin,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildNavItem(
-    BuildContext context,
-    IconData icon,
-    String label,
-    bool isActive,
-    String route,
-  ) {
-    return GestureDetector(
-      onTap: () {
-        if (!isActive) {
-          Navigator.pushNamed(context, route);
-        }
-      },
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, color: isActive ? const Color(0xFF13EC13) : Colors.grey),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.bold,
-              color: isActive ? const Color(0xFF13EC13) : Colors.grey,
-            ),
-          ),
-        ],
-      ),
-    );
+    return const FridgeBottomNavigation(currentTab: FridgeTab.fridge);
   }
 }

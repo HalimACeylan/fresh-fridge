@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:fridge_app/routes.dart';
+import 'package:fridge_app/widgets/fridge_bottom_navigation.dart';
+import 'package:fridge_app/widgets/fridge_header.dart';
 
 class RecipeVotingScreen extends StatelessWidget {
   const RecipeVotingScreen({super.key});
@@ -14,48 +16,17 @@ class RecipeVotingScreen extends StatelessWidget {
           children: [
             Column(
               children: [
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 12,
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Family Dinner',
-                            style: TextStyle(
-                              color: Colors.grey[600],
-                              fontWeight: FontWeight.w500,
-                              fontSize: 14,
-                            ),
-                          ),
-                          const Text(
-                            'Vote for Tonight',
-                            style: TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF102210),
-                            ),
-                          ),
-                        ],
-                      ),
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: Colors.grey[200]!),
-                        ),
-                        child: const Icon(
-                          Icons.filter_list,
-                          color: Colors.grey,
-                        ),
-                      ),
-                    ],
+                FridgeHeader(
+                  superTitle: 'Family Dinner',
+                  title: 'Vote for Tonight',
+                  trailing: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: Colors.grey[200]!),
+                    ),
+                    child: const Icon(Icons.filter_list, color: Colors.grey),
                   ),
                 ),
                 Expanded(
@@ -165,7 +136,12 @@ class RecipeVotingScreen extends StatelessWidget {
                       const SizedBox(height: 24),
                       // Suggest Button
                       OutlinedButton.icon(
-                        onPressed: () {},
+                        onPressed: () {
+                          Navigator.pushNamed(
+                            context,
+                            AppRoutes.suggestedRecipes,
+                          );
+                        },
                         icon: const Icon(Icons.add_circle_outline),
                         label: const Text('Suggest something else'),
                         style: OutlinedButton.styleFrom(
@@ -221,205 +197,208 @@ class RecipeVotingScreen extends StatelessWidget {
     required List<String> voters,
     bool isGrayscaleVoters = false,
   }) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF13EC13).withOpacity(0.1),
-            blurRadius: 20,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        children: [
-          Stack(
-            children: [
-              Image.asset(
-                imagePath,
-                height: 180,
-                width: double.infinity,
-                fit: BoxFit.cover,
-              ),
-              Positioned.fill(
-                child: Container(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.bottomCenter,
-                      end: Alignment.topCenter,
-                      colors: [
-                        Colors.black.withOpacity(0.7),
-                        Colors.transparent,
-                      ],
-                      stops: const [0.0, 0.5],
-                    ),
-                  ),
+    return GestureDetector(
+      onTap: () {},
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF13EC13).withOpacity(0.1),
+              blurRadius: 20,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          children: [
+            Stack(
+              children: [
+                Image.asset(
+                  imagePath,
+                  height: 180,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
                 ),
-              ),
-              if (badges.isNotEmpty)
-                Positioned(
-                  top: 12,
-                  left: 12,
-                  right: 12,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      badges.first,
-                      if (badges.length > 1) badges.last,
-                    ],
-                  ),
-                ),
-              Positioned(
-                bottom: 12,
-                left: 12,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
+                Positioned.fill(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.bottomCenter,
+                        end: Alignment.topCenter,
+                        colors: [
+                          Colors.black.withOpacity(0.7),
+                          Colors.transparent,
+                        ],
+                        stops: const [0.0, 0.5],
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    Row(
+                  ),
+                ),
+                if (badges.isNotEmpty)
+                  Positioned(
+                    top: 12,
+                    left: 12,
+                    right: 12,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Icon(
-                          Icons.schedule,
-                          color: Colors.white70,
-                          size: 14,
+                        badges.first,
+                        if (badges.length > 1) badges.last,
+                      ],
+                    ),
+                  ),
+                Positioned(
+                  bottom: 12,
+                  left: 12,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
                         ),
-                        const SizedBox(width: 4),
-                        Text(
-                          time,
-                          style: const TextStyle(
-                            color: Colors.white70,
-                            fontSize: 12,
-                          ),
-                        ),
-                        if (difficulty.isNotEmpty) ...[
-                          const SizedBox(width: 12),
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
                           const Icon(
-                            Icons.restaurant,
+                            Icons.schedule,
                             color: Colors.white70,
                             size: 14,
                           ),
                           const SizedBox(width: 4),
                           Text(
-                            difficulty,
+                            time,
                             style: const TextStyle(
                               color: Colors.white70,
                               fontSize: 12,
                             ),
                           ),
+                          if (difficulty.isNotEmpty) ...[
+                            const SizedBox(width: 12),
+                            const Icon(
+                              Icons.restaurant,
+                              color: Colors.white70,
+                              size: 14,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              difficulty,
+                              style: const TextStyle(
+                                color: Colors.white70,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
                         ],
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(
-                      children: [
-                        SizedBox(
-                          width: 80, // Overlap width
-                          height: 32,
-                          child: Stack(
-                            children: [
-                              for (int i = 0; i < voters.length; i++)
-                                Positioned(
-                                  left: i * 20.0,
-                                  child: Container(
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      border: Border.all(
-                                        color: Colors.white,
-                                        width: 2,
-                                      ),
-                                    ),
-                                    child: CircleAvatar(
-                                      radius: 14,
-                                      backgroundImage: AssetImage(voters[i]),
-                                      backgroundColor: Colors.grey[200],
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 4,
                       ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF13EC13).withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        '$votes Votes',
-                        style: const TextStyle(
-                          color: Color(0xFF102210),
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: () {},
-                        icon: const Icon(Icons.thumb_up),
-                        label: const Text('Vote Yes'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF13EC13),
-                          foregroundColor: Colors.black,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Container(
-                      decoration: BoxDecoration(
-                        color: Colors.grey[100],
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: IconButton(
-                        icon: const Icon(
-                          Icons.thumb_down_outlined,
-                          color: Colors.grey,
-                        ),
-                        onPressed: () {},
-                      ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ],
             ),
-          ),
-        ],
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          SizedBox(
+                            width: 80, // Overlap width
+                            height: 32,
+                            child: Stack(
+                              children: [
+                                for (int i = 0; i < voters.length; i++)
+                                  Positioned(
+                                    left: i * 20.0,
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                          color: Colors.white,
+                                          width: 2,
+                                        ),
+                                      ),
+                                      child: CircleAvatar(
+                                        radius: 14,
+                                        backgroundImage: AssetImage(voters[i]),
+                                        backgroundColor: Colors.grey[200],
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF13EC13).withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          '$votes Votes',
+                          style: const TextStyle(
+                            color: Color(0xFF102210),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: () {},
+                          icon: const Icon(Icons.thumb_up),
+                          label: const Text('Vote Yes'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF13EC13),
+                            foregroundColor: Colors.black,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.grey[100],
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: IconButton(
+                          icon: const Icon(
+                            Icons.thumb_down_outlined,
+                            color: Colors.grey,
+                          ),
+                          onPressed: () {},
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -507,79 +486,6 @@ class RecipeVotingScreen extends StatelessWidget {
   }
 
   Widget _buildBottomNav(BuildContext context) {
-    return Container(
-      height: 80,
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(0),
-        ), // HTML shows standard nav bar look
-        border: Border(top: BorderSide(color: Colors.black12)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _buildNavItem(
-            context,
-            Icons.kitchen_outlined,
-            'Inventory',
-            false,
-            AppRoutes.insideFridge,
-          ), // Using existing route
-          _buildNavItem(
-            context,
-            Icons.restaurant_menu,
-            'Recipes',
-            true,
-            AppRoutes.recipeVoting,
-          ),
-          _buildNavItem(
-            context,
-            Icons.shopping_cart_outlined,
-            'Shop',
-            false,
-            '',
-          ),
-          _buildNavItem(
-            context,
-            Icons.settings_outlined,
-            'Settings',
-            false,
-            AppRoutes.homeManagerAdmin,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildNavItem(
-    BuildContext context,
-    IconData icon,
-    String label,
-    bool isActive,
-    String route,
-  ) {
-    return GestureDetector(
-      onTap: () {
-        if (!isActive && route.isNotEmpty) {
-          Navigator.pushNamed(context, route);
-        }
-      },
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, color: isActive ? const Color(0xFF13EC13) : Colors.grey),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.bold,
-              color: isActive ? const Color(0xFF13EC13) : Colors.grey,
-            ),
-          ),
-        ],
-      ),
-    );
+    return const FridgeBottomNavigation(currentTab: FridgeTab.cook);
   }
 }
