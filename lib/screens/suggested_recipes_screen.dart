@@ -47,12 +47,16 @@ class SuggestedRecipesScreen extends StatelessWidget {
                         missingItems: ['Soy Sauce'],
                       ),
                       const SizedBox(height: 24),
-                      _buildCompactRecipeCard(
+                      _buildRecipeCard(
                         context,
                         title: 'Avocado & Kale Salad',
-                        subtitle: 'Use up: 2 Avocados, Kale',
+                        description:
+                            'A fresh and healthy salad to use up your avocados and kale. Light, nutritious, and ready in minutes.',
                         imagePath: 'assets/images/avocado_salad.png',
+                        rating: 4.6,
                         time: '10 min',
+                        kcal: '280 kcal',
+                        type: 'Salad',
                         missingItems: ['Dressing'],
                       ),
                       const SizedBox(height: 24),
@@ -332,112 +336,6 @@ class SuggestedRecipesScreen extends StatelessWidget {
                     ],
                   ),
                 ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCompactRecipeCard(
-    BuildContext context, {
-    required String title,
-    required String subtitle,
-    required String imagePath,
-    required String time,
-    required List<String> missingItems,
-  }) {
-    return GestureDetector(
-      onTap: () {
-        Navigator.pushNamed(context, AppRoutes.recipePreparation);
-      },
-      child: Container(
-        height: 140,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: Row(
-          children: [
-            Image.asset(imagePath, width: 140, height: 140, fit: BoxFit.cover),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          title,
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          subtitle,
-                          style: TextStyle(
-                            color: Colors.grey[500],
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
-                    ),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.grey[100],
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Row(
-                            children: [
-                              const Icon(
-                                Icons.circle,
-                                size: 10,
-                                color: Colors.orange,
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                'Missing ${missingItems[0]}',
-                                style: const TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.grey,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Text(
-                          time,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
               ),
             ),
           ],
