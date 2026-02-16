@@ -4,10 +4,17 @@ import 'package:fridge_app/routes.dart';
 import 'package:fridge_app/services/fridge_service.dart';
 import 'package:fridge_app/widgets/fridge_bottom_navigation.dart';
 import 'package:fridge_app/widgets/fridge_header.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:permission_handler/permission_handler.dart';
 
-class InsideFridgeScreen extends StatelessWidget {
+class InsideFridgeScreen extends StatefulWidget {
   const InsideFridgeScreen({super.key});
 
+  @override
+  State<InsideFridgeScreen> createState() => _InsideFridgeScreenState();
+}
+
+class _InsideFridgeScreenState extends State<InsideFridgeScreen> {
   @override
   Widget build(BuildContext context) {
     final service = FridgeService.instance;
@@ -68,7 +75,7 @@ class InsideFridgeScreen extends StatelessWidget {
               right: 24,
               child: FloatingActionButton(
                 onPressed: () {
-                  Navigator.pushNamed(context, AppRoutes.scanReceipt);
+                  _pickImage();
                 },
                 backgroundColor: const Color(0xFF13EC13),
                 child: const Icon(Icons.add, color: Colors.white),
@@ -624,5 +631,43 @@ class InsideFridgeScreen extends StatelessWidget {
 
   Widget _buildBottomNav(BuildContext context) {
     return const FridgeBottomNavigation(currentTab: FridgeTab.fridge);
+  }
+
+  Future<void> _pickImage() async {
+    // Check for camera permission
+    var status = await Permission.camera.status;
+    if (!status.isGranted) {
+      status = await Permission.camera.request();
+      if (!status.isGranted) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Camera permission is required to take photos'),
+            ),
+          );
+        }
+        return;
+      }
+    }
+
+    try {
+      final ImagePicker picker = ImagePicker();
+      final XFile? photo = await picker.pickImage(source: ImageSource.camera);
+
+      if (photo != null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Image captured successfully!')),
+          );
+          // TODO: Navigate to add item screen with the photo
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error assessing camera: $e')));
+      }
+    }
   }
 }

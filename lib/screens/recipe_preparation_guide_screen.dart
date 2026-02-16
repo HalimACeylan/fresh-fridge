@@ -90,14 +90,14 @@ class RecipePreparationGuideScreen extends StatelessWidget {
                         Image.network(
                           recipe.imageUrl!,
                           fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) =>
+                          errorBuilder: (_, _, _) =>
                               Container(color: Colors.grey[800]),
                         )
                       else if (recipe.imageUrl != null)
                         Image.asset(
                           recipe.imageUrl!,
                           fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) =>
+                          errorBuilder: (_, _, _) =>
                               Container(color: Colors.grey[800]),
                         )
                       else

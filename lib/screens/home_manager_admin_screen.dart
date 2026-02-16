@@ -470,7 +470,7 @@ class HomeManagerAdminScreen extends StatelessWidget {
           Switch(
             value: value,
             onChanged: (v) {},
-            activeColor: const Color(0xFF13EC13),
+            activeThumbColor: const Color(0xFF13EC13),
             activeTrackColor: const Color(0xFF13EC13).withOpacity(0.2),
             inactiveThumbColor: Colors.white,
             inactiveTrackColor: Colors.grey[300],

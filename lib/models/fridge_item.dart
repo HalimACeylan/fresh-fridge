@@ -231,5 +231,5 @@ class FridgeItem {
 
   @override
   String toString() =>
-      'FridgeItem(id: $id, name: $name, ${amountDisplay}, category: ${category.label})';
+      'FridgeItem(id: $id, name: $name, $amountDisplay, category: ${category.label})';
 }

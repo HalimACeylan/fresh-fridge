@@ -195,7 +195,7 @@ class _SuggestedRecipesScreenState extends State<SuggestedRecipesScreen> {
                     height: 220,
                     width: double.infinity,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
+                    errorBuilder: (_, _, _) => Container(
                       height: 220,
                       color: Colors.grey[300],
                       child: const Icon(Icons.broken_image),
@@ -207,7 +207,7 @@ class _SuggestedRecipesScreenState extends State<SuggestedRecipesScreen> {
                     height: 220,
                     width: double.infinity,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
+                    errorBuilder: (_, _, _) => Container(
                       height: 220,
                       color: Colors.grey[300],
                       child: const Icon(Icons.broken_image),
