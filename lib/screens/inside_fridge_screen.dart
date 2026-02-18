@@ -15,6 +15,65 @@ class InsideFridgeScreen extends StatefulWidget {
 }
 
 class _InsideFridgeScreenState extends State<InsideFridgeScreen> {
+  Future<void> _openItemDetails(FridgeItem item) async {
+    final didDelete = await Navigator.pushNamed(
+      context,
+      AppRoutes.foodItemDetails,
+      arguments: item,
+    );
+
+    if (!mounted || didDelete != true) return;
+
+    setState(() {});
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('${item.name} removed from fridge')));
+  }
+
+  Future<bool> _confirmDelete(FridgeItem item) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Remove Item'),
+          content: Text('Remove ${item.name} from your fridge?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+
+    return confirmed ?? false;
+  }
+
+  Future<void> _deleteFromList(FridgeItem item) async {
+    final shouldDelete = await _confirmDelete(item);
+    if (!shouldDelete) return;
+
+    final deleted = await FridgeService.instance.deleteItemById(item.id);
+    if (!mounted) return;
+
+    if (!deleted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Item could not be removed')),
+      );
+      return;
+    }
+
+    setState(() {});
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('${item.name} removed from fridge')));
+  }
+
   @override
   Widget build(BuildContext context) {
     final service = FridgeService.instance;
@@ -49,7 +108,7 @@ class _InsideFridgeScreenState extends State<InsideFridgeScreen> {
                         ...urgentItems.map(
                           (item) => Padding(
                             padding: const EdgeInsets.only(bottom: 12),
-                            child: _buildUrgentItem(context, item),
+                            child: _buildUrgentItem(item),
                           ),
                         ),
                         const SizedBox(height: 12),
@@ -124,15 +183,13 @@ class _InsideFridgeScreenState extends State<InsideFridgeScreen> {
             mainAxisSpacing: 12,
             crossAxisSpacing: 12,
             childAspectRatio: 0.85,
-            children: nonUrgent
-                .map((item) => _buildGridItem(context, item))
-                .toList(),
+            children: nonUrgent.map((item) => _buildGridItem(item)).toList(),
           )
         else
           ...nonUrgent.map(
             (item) => Padding(
               padding: const EdgeInsets.only(bottom: 12),
-              child: _buildListItem(context, item),
+              child: _buildListItem(item),
             ),
           ),
         const SizedBox(height: 24),
@@ -386,18 +443,13 @@ class _InsideFridgeScreenState extends State<InsideFridgeScreen> {
     );
   }
 
-  Widget _buildUrgentItem(BuildContext context, FridgeItem item) {
+  Widget _buildUrgentItem(FridgeItem item) {
     final color = _freshnessColor(item);
     final progress = _freshnessProgress(item);
 
     return GestureDetector(
-      onTap: () {
-        Navigator.pushNamed(
-          context,
-          AppRoutes.foodItemDetails,
-          arguments: item,
-        );
-      },
+      key: ValueKey('urgent_item_${item.id}'),
+      onTap: () => _openItemDetails(item),
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
@@ -474,9 +526,7 @@ class _InsideFridgeScreenState extends State<InsideFridgeScreen> {
             ),
             IconButton(
               icon: const Icon(Icons.delete_outline, color: Colors.grey),
-              onPressed: () {
-                // Delete action placeholder
-              },
+              onPressed: () => _deleteFromList(item),
             ),
           ],
         ),
@@ -484,18 +534,13 @@ class _InsideFridgeScreenState extends State<InsideFridgeScreen> {
     );
   }
 
-  Widget _buildGridItem(BuildContext context, FridgeItem item) {
+  Widget _buildGridItem(FridgeItem item) {
     final color = _freshnessColor(item);
     final progress = _freshnessProgress(item);
 
     return GestureDetector(
-      onTap: () {
-        Navigator.pushNamed(
-          context,
-          AppRoutes.foodItemDetails,
-          arguments: item,
-        );
-      },
+      key: ValueKey('grid_item_${item.id}'),
+      onTap: () => _openItemDetails(item),
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
@@ -543,18 +588,13 @@ class _InsideFridgeScreenState extends State<InsideFridgeScreen> {
     );
   }
 
-  Widget _buildListItem(BuildContext context, FridgeItem item) {
+  Widget _buildListItem(FridgeItem item) {
     final color = _freshnessColor(item);
     final progress = _freshnessProgress(item);
 
     return GestureDetector(
-      onTap: () {
-        Navigator.pushNamed(
-          context,
-          AppRoutes.foodItemDetails,
-          arguments: item,
-        );
-      },
+      key: ValueKey('list_item_${item.id}'),
+      onTap: () => _openItemDetails(item),
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(

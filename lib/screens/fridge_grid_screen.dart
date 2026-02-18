@@ -33,6 +33,21 @@ class _FridgeGridScreenState extends State<FridgeGridScreen> {
     return items;
   }
 
+  Future<void> _openItemDetails(FridgeItem item) async {
+    final didDelete = await Navigator.pushNamed(
+      context,
+      AppRoutes.foodItemDetails,
+      arguments: item,
+    );
+
+    if (!mounted || didDelete != true) return;
+
+    setState(() {});
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('${item.name} removed from fridge')));
+  }
+
   Future<void> _pickImage() async {
     // Check for camera permission
     var status = await Permission.camera.status;
@@ -178,7 +193,7 @@ class _FridgeGridScreenState extends State<FridgeGridScreen> {
                       mainAxisSpacing: 16,
                       childAspectRatio: 0.8,
                       children: [
-                        ...items.map((item) => _buildItemCard(context, item)),
+                        ...items.map((item) => _buildItemCard(item)),
                         _buildAddItemCard(context),
                       ],
                     ),
@@ -232,7 +247,7 @@ class _FridgeGridScreenState extends State<FridgeGridScreen> {
     );
   }
 
-  Widget _buildItemCard(BuildContext context, FridgeItem item) {
+  Widget _buildItemCard(FridgeItem item) {
     final isCritical = item.freshnessStatus == FreshnessStatus.expired;
     final isWarning = item.freshnessStatus == FreshnessStatus.expiringSoon;
     final statusColor = isCritical
@@ -244,13 +259,7 @@ class _FridgeGridScreenState extends State<FridgeGridScreen> {
         : const Color(0xFF13EC13);
 
     return GestureDetector(
-      onTap: () {
-        Navigator.pushNamed(
-          context,
-          AppRoutes.foodItemDetails,
-          arguments: item,
-        );
-      },
+      onTap: () => _openItemDetails(item),
       child: Container(
         decoration: BoxDecoration(
           color: Colors.white,

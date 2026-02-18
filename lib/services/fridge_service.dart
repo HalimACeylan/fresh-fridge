@@ -6,7 +6,7 @@ import 'package:fridge_app/models/units.dart';
 /// Designed with the same interface that a Firebase-backed implementation
 /// would expose, making migration straightforward:
 ///   - Replace the `_items` list with Firestore queries.
-///   - Replace `addItem` / `updateItem` / `deleteItem` with doc writes.
+///   - Replace `addItem` / `updateItem` / `deleteItemById` with doc writes.
 class FridgeService {
   // Singleton
   FridgeService._();
@@ -302,9 +302,20 @@ class FridgeService {
     }
   }
 
+  bool _deleteItemInternal(String id) {
+    final initialLength = _items.length;
+    _items.removeWhere((item) => item.id == id);
+    return _items.length < initialLength;
+  }
+
   /// Remove an item by ID.
   void deleteItem(String id) {
-    _items.removeWhere((item) => item.id == id);
+    _deleteItemInternal(id);
+  }
+
+  /// Async delete API kept intentionally for future Firebase writes.
+  Future<bool> deleteItemById(String id) {
+    return Future.value(_deleteItemInternal(id));
   }
 
   /// Search items by name (case-insensitive).

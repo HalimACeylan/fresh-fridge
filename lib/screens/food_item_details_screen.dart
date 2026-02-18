@@ -5,6 +5,42 @@ import 'package:fridge_app/services/fridge_service.dart'; // Import FridgeServic
 class FoodItemDetailsScreen extends StatelessWidget {
   const FoodItemDetailsScreen({super.key});
 
+  Future<void> _deleteItem(BuildContext context, FridgeItem item) async {
+    final shouldDelete = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Remove Item'),
+          content: Text('Remove ${item.name} from your fridge?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (shouldDelete != true || !context.mounted) return;
+
+    final deleted = await FridgeService.instance.deleteItemById(item.id);
+    if (!context.mounted) return;
+
+    if (!deleted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Item could not be removed')),
+      );
+      return;
+    }
+
+    Navigator.pop(context, true);
+  }
+
   @override
   Widget build(BuildContext context) {
     // Get item from arguments
@@ -243,11 +279,7 @@ class FoodItemDetailsScreen extends StatelessWidget {
                   SizedBox(
                     width: double.infinity,
                     child: OutlinedButton.icon(
-                      onPressed: () async {
-                        // Confirm deletion?
-                        FridgeService.instance.deleteItem(item.id);
-                        Navigator.pop(context); // Go back after delete
-                      },
+                      onPressed: () => _deleteItem(context, item),
                       icon: const Icon(Icons.delete_outline, color: Colors.red),
                       label: const Text(
                         'Remove from Fridge',
