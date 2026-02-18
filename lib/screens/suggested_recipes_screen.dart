@@ -1,7 +1,11 @@
+import 'dart:collection';
+
 import 'package:flutter/material.dart';
-import 'package:fridge_app/models/recipe.dart'; // Import Recipe model
+import 'package:fridge_app/models/fridge_item.dart';
+import 'package:fridge_app/models/recipe.dart';
 import 'package:fridge_app/routes.dart';
-import 'package:fridge_app/services/recipe_service.dart'; // Import RecipeService
+import 'package:fridge_app/services/fridge_service.dart';
+import 'package:fridge_app/services/recipe_service.dart';
 import 'package:fridge_app/widgets/fridge_bottom_navigation.dart';
 import 'package:fridge_app/widgets/fridge_header.dart';
 
@@ -13,22 +17,128 @@ class SuggestedRecipesScreen extends StatefulWidget {
 }
 
 class _SuggestedRecipesScreenState extends State<SuggestedRecipesScreen> {
-  late List<Recipe> _recipes;
+  late final TextEditingController _recipeSearchController;
+  late final TextEditingController _ingredientSearchController;
+  late final FocusNode _ingredientFocusNode;
+  late final List<FridgeItem> _fridgeIngredients;
+  late final List<Recipe> _recipes;
+
+  final LinkedHashSet<String> _selectedIngredientIds = LinkedHashSet<String>();
+  String _recipeSearchQuery = '';
+  String _ingredientQuery = '';
 
   @override
   void initState() {
     super.initState();
-    _loadRecipes();
+    _recipeSearchController = TextEditingController();
+    _ingredientSearchController = TextEditingController();
+    _ingredientFocusNode = FocusNode();
+    _ingredientFocusNode.addListener(() => setState(() {}));
+    _loadData();
   }
 
-  void _loadRecipes() {
+  @override
+  void dispose() {
+    _recipeSearchController.dispose();
+    _ingredientSearchController.dispose();
+    _ingredientFocusNode.dispose();
+    super.dispose();
+  }
+
+  void _loadData() {
+    final uniqueByName = <String, FridgeItem>{};
+    for (final item in FridgeService.instance.getAllItems()) {
+      final key = item.name.toLowerCase();
+      uniqueByName.putIfAbsent(key, () => item);
+    }
+
+    _fridgeIngredients = uniqueByName.values.toList()
+      ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    _recipes = RecipeService.instance.getSuggestedRecipes();
+  }
+
+  List<FridgeItem> get _selectedIngredients {
+    return _fridgeIngredients
+        .where((item) => _selectedIngredientIds.contains(item.id))
+        .toList();
+  }
+
+  List<FridgeItem> get _ingredientSuggestions {
+    final query = _ingredientQuery.trim().toLowerCase();
+    if (query.isEmpty) return const [];
+
+    return _fridgeIngredients
+        .where((item) {
+          if (_selectedIngredientIds.contains(item.id)) return false;
+          return item.name.toLowerCase().contains(query);
+        })
+        .take(8)
+        .toList();
+  }
+
+  bool _ingredientMatchesFridgeItem(String ingredientName, String fridgeName) {
+    final ingredient = ingredientName.toLowerCase();
+    final item = fridgeName.toLowerCase();
+
+    if (ingredient.contains(item) || item.contains(ingredient)) return true;
+
+    final ingredientWords = ingredient
+        .split(RegExp(r'\s+'))
+        .where((word) => word.length > 2)
+        .toSet();
+    final itemWords = item
+        .split(RegExp(r'\s+'))
+        .where((word) => word.length > 2)
+        .toSet();
+
+    return ingredientWords.any(itemWords.contains);
+  }
+
+  bool _recipeContainsIngredient(Recipe recipe, FridgeItem item) {
+    return recipe.ingredients.any(
+      (ingredient) => _ingredientMatchesFridgeItem(ingredient.name, item.name),
+    );
+  }
+
+  List<Recipe> get _visibleRecipes {
+    Iterable<Recipe> filtered = _recipes;
+
+    if (_recipeSearchQuery.isNotEmpty) {
+      filtered = filtered.where(
+        (recipe) => recipe.title.toLowerCase().contains(_recipeSearchQuery),
+      );
+    }
+
+    if (_selectedIngredientIds.isNotEmpty) {
+      final selectedIngredients = _selectedIngredients;
+      filtered = filtered.where(
+        (recipe) => selectedIngredients.every(
+          (item) => _recipeContainsIngredient(recipe, item),
+        ),
+      );
+    }
+
+    return filtered.toList();
+  }
+
+  void _addIngredientFilter(FridgeItem item) {
     setState(() {
-      _recipes = RecipeService.instance.getSuggestedRecipes();
+      _selectedIngredientIds.add(item.id);
+      _ingredientQuery = '';
+      _ingredientSearchController.clear();
+    });
+  }
+
+  void _removeIngredientFilter(String id) {
+    setState(() {
+      _selectedIngredientIds.remove(id);
     });
   }
 
   @override
   Widget build(BuildContext context) {
+    final recipes = _visibleRecipes;
+
     return Scaffold(
       backgroundColor: const Color(0xFFF6F8F6),
       body: SafeArea(
@@ -38,36 +148,12 @@ class _SuggestedRecipesScreenState extends State<SuggestedRecipesScreen> {
             Column(
               children: [
                 _buildHeader(context),
-                _buildFilters(),
-                Expanded(
-                  child: ListView.separated(
-                    padding: const EdgeInsets.fromLTRB(24, 0, 24, 100),
-                    itemCount: _recipes.length + 1, // +1 for footer text
-                    separatorBuilder: (context, index) =>
-                        const SizedBox(height: 24),
-                    itemBuilder: (context, index) {
-                      if (index == _recipes.length) {
-                        return const Center(
-                          child: Padding(
-                            padding: EdgeInsets.only(top: 8.0),
-                            child: Text(
-                              'Showing top matches for your inventory.',
-                              style: TextStyle(
-                                color: Colors.grey,
-                                fontSize: 14,
-                              ),
-                            ),
-                          ),
-                        );
-                      }
-                      final recipe = _recipes[index];
-                      return _buildRecipeCard(context, recipe);
-                    },
-                  ),
-                ),
+                _buildRecipeSearchBar(),
+                _buildIngredientSearchPicker(),
+                _buildSelectedIngredientCards(),
+                Expanded(child: _buildRecipeList(context, recipes)),
               ],
             ),
-            // Bottom Nav and FAB
             Positioned(
               bottom: 0,
               left: 0,
@@ -113,51 +199,216 @@ class _SuggestedRecipesScreenState extends State<SuggestedRecipesScreen> {
     );
   }
 
-  Widget _buildFilters() {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-      child: Row(
+  Widget _buildRecipeSearchBar() {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(24, 8, 24, 4),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: TextField(
+        key: const ValueKey('recipe_name_search_field'),
+        controller: _recipeSearchController,
+        onChanged: (value) {
+          setState(() {
+            _recipeSearchQuery = value.trim().toLowerCase();
+          });
+        },
+        decoration: InputDecoration(
+          icon: const Icon(Icons.search, color: Colors.grey),
+          hintText: 'Search recipe name...',
+          border: InputBorder.none,
+          suffixIcon: _recipeSearchQuery.isEmpty
+              ? null
+              : IconButton(
+                  icon: const Icon(Icons.close, size: 20),
+                  onPressed: () {
+                    _recipeSearchController.clear();
+                    setState(() {
+                      _recipeSearchQuery = '';
+                    });
+                  },
+                ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildIngredientSearchPicker() {
+    final suggestions = _ingredientSuggestions;
+    final showSuggestions =
+        suggestions.isNotEmpty &&
+        _ingredientFocusNode.hasFocus &&
+        _ingredientQuery.trim().isNotEmpty;
+
+    return Column(
+      children: [
+        Container(
+          margin: const EdgeInsets.fromLTRB(24, 8, 24, 0),
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFF13EC13).withOpacity(0.3)),
+          ),
+          child: TextField(
+            key: const ValueKey('ingredient_filter_search_field'),
+            controller: _ingredientSearchController,
+            focusNode: _ingredientFocusNode,
+            onChanged: (value) {
+              setState(() {
+                _ingredientQuery = value;
+              });
+            },
+            decoration: const InputDecoration(
+              icon: Icon(Icons.filter_alt_outlined, color: Colors.grey),
+              hintText: 'Add ingredient filter from fridge...',
+              border: InputBorder.none,
+            ),
+          ),
+        ),
+        if (showSuggestions)
+          Container(
+            margin: const EdgeInsets.fromLTRB(24, 8, 24, 0),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 8,
+                  offset: const Offset(0, 3),
+                ),
+              ],
+            ),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: suggestions.map((item) {
+                return ActionChip(
+                  key: ValueKey('ingredient_suggestion_${item.id}'),
+                  avatar: Text(
+                    item.category.emoji,
+                    style: const TextStyle(fontSize: 14),
+                  ),
+                  label: Text(item.name),
+                  onPressed: () => _addIngredientFilter(item),
+                );
+              }).toList(),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildSelectedIngredientCards() {
+    final selected = _selectedIngredients;
+    if (selected.isEmpty) return const SizedBox(height: 12);
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 10, 24, 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildFilterChip('All Matches', true),
-          const SizedBox(width: 12),
-          _buildFilterChip('Under 30 min', false),
-          const SizedBox(width: 12),
-          _buildFilterChip('Vegetarian', false),
-          const SizedBox(width: 12),
-          _buildFilterChip('Asian', false),
+          Row(
+            children: [
+              const Text(
+                'Active Ingredient Filters',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+              ),
+              const Spacer(),
+              TextButton(
+                onPressed: () {
+                  setState(() {
+                    _selectedIngredientIds.clear();
+                  });
+                },
+                child: const Text('Clear all'),
+              ),
+            ],
+          ),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: selected.map((item) {
+              return InputChip(
+                key: ValueKey('selected_ingredient_${item.id}'),
+                avatar: Text(
+                  item.category.emoji,
+                  style: const TextStyle(fontSize: 14),
+                ),
+                label: Text(item.name),
+                deleteIcon: const Icon(Icons.close, size: 18),
+                onDeleted: () => _removeIngredientFilter(item.id),
+              );
+            }).toList(),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildFilterChip(String label, bool isSelected) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-      decoration: BoxDecoration(
-        color: isSelected ? const Color(0xFF13EC13) : Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: isSelected ? const Color(0xFF13EC13) : Colors.grey[200]!,
+  Widget _buildRecipeList(BuildContext context, List<Recipe> recipes) {
+    if (recipes.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.search_off, size: 48, color: Colors.grey[400]),
+              const SizedBox(height: 12),
+              const Text(
+                'No recipes found',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Try another search or adjust ingredient filters.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey[600]),
+              ),
+            ],
+          ),
         ),
-        boxShadow: isSelected
-            ? [
-                BoxShadow(
-                  color: const Color(0xFF13EC13).withOpacity(0.2),
-                  blurRadius: 8,
-                  offset: const Offset(0, 4),
-                ),
-              ]
-            : [],
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: isSelected ? Colors.black : Colors.grey[600],
-          fontWeight: FontWeight.w600,
-          fontSize: 14,
-        ),
-      ),
+      );
+    }
+
+    final hasFilters =
+        _recipeSearchQuery.isNotEmpty || _selectedIngredientIds.isNotEmpty;
+    final footerText = hasFilters
+        ? 'Showing ${recipes.length} filtered recipe${recipes.length == 1 ? '' : 's'}.'
+        : 'Showing top matches for your inventory.';
+
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(24, 0, 24, 100),
+      itemCount: recipes.length + 1,
+      separatorBuilder: (context, index) => const SizedBox(height: 24),
+      itemBuilder: (context, index) {
+        if (index == recipes.length) {
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                footerText,
+                style: const TextStyle(color: Colors.grey, fontSize: 14),
+              ),
+            ),
+          );
+        }
+
+        final recipe = recipes[index];
+        return _buildRecipeCard(context, recipe);
+      },
     );
   }
 
@@ -167,7 +418,7 @@ class _SuggestedRecipesScreenState extends State<SuggestedRecipesScreen> {
         Navigator.pushNamed(
           context,
           AppRoutes.recipePreparation,
-          arguments: recipe, // Pass recipe object
+          arguments: recipe,
         );
       },
       child: Container(
@@ -219,7 +470,6 @@ class _SuggestedRecipesScreenState extends State<SuggestedRecipesScreen> {
                     color: Colors.grey[300],
                     child: const Icon(Icons.image),
                   ),
-
                 Positioned(
                   top: 12,
                   right: 12,
@@ -357,11 +607,7 @@ class _SuggestedRecipesScreenState extends State<SuggestedRecipesScreen> {
   Widget _buildIconText(IconData icon, String text) {
     return Row(
       children: [
-        Icon(
-          icon,
-          size: 20,
-          color: const Color(0xFF13EC13),
-        ), // Using primary color for icons as per HTML
+        Icon(icon, size: 20, color: const Color(0xFF13EC13)),
         const SizedBox(width: 8),
         Text(
           text,
