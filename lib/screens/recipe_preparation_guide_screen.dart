@@ -1,34 +1,147 @@
 import 'package:flutter/material.dart';
-import 'package:fridge_app/models/recipe.dart'; // Import Recipe model
+import 'package:fridge_app/models/fridge_item.dart';
+import 'package:fridge_app/models/recipe.dart';
 import 'package:fridge_app/routes.dart';
-import 'package:fridge_app/services/fridge_service.dart'; // Import FridgeService for inventory check
+import 'package:fridge_app/services/fridge_service.dart';
 
-class RecipePreparationGuideScreen extends StatelessWidget {
-  const RecipePreparationGuideScreen({super.key});
+class RecipePreparationGuideScreen extends StatefulWidget {
+  const RecipePreparationGuideScreen({super.key, this.recipe});
+
+  final Recipe? recipe;
+
+  @override
+  State<RecipePreparationGuideScreen> createState() =>
+      _RecipePreparationGuideScreenState();
+}
+
+class _RecipePreparationGuideScreenState
+    extends State<RecipePreparationGuideScreen> {
+  bool _isConsumingIngredients = false;
+  List<FridgeItem> _fridgeItems = const [];
+
+  Recipe _resolveRecipe(BuildContext context) {
+    return widget.recipe ??
+        (ModalRoute.of(context)!.settings.arguments as Recipe);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _fridgeItems = FridgeService.instance.getAllItems();
+  }
+
+  bool _ingredientMatchesFridgeItem(String ingredientName, String fridgeName) {
+    final ingredient = ingredientName.toLowerCase();
+    final item = fridgeName.toLowerCase();
+
+    if (item.contains(ingredient) || ingredient.contains(item)) return true;
+
+    final ingredientWords = ingredient
+        .split(RegExp(r'\s+'))
+        .where((word) => word.length > 2)
+        .toSet();
+    final itemWords = item
+        .split(RegExp(r'\s+'))
+        .where((word) => word.length > 2)
+        .toSet();
+
+    return ingredientWords.any(itemWords.contains);
+  }
+
+  bool _isInFridge(String ingredientName, List<FridgeItem> fridgeItems) {
+    return fridgeItems.any(
+      (item) => _ingredientMatchesFridgeItem(ingredientName, item.name),
+    );
+  }
+
+  Set<String> _findUsedItemIds(Recipe recipe, List<FridgeItem> fridgeItems) {
+    final usedIds = <String>{};
+
+    for (final ingredient in recipe.ingredients) {
+      for (final item in fridgeItems) {
+        if (_ingredientMatchesFridgeItem(ingredient.name, item.name)) {
+          usedIds.add(item.id);
+        }
+      }
+    }
+
+    return usedIds;
+  }
+
+  Future<void> _consumeUsedIngredients(
+    BuildContext context,
+    Recipe recipe,
+  ) async {
+    if (_isConsumingIngredients) return;
+
+    final usedItemIds = _findUsedItemIds(recipe, _fridgeItems);
+
+    if (usedItemIds.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No matching fridge ingredients were found to remove.'),
+        ),
+      );
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Use Ingredients?'),
+          content: Text(
+            'This will remove ${usedItemIds.length} ingredient item${usedItemIds.length == 1 ? '' : 's'} from your fridge.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Remove'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true || !context.mounted) return;
+
+    setState(() {
+      _isConsumingIngredients = true;
+    });
+
+    int removedCount = 0;
+    try {
+      for (final id in usedItemIds) {
+        final deleted = await FridgeService.instance.deleteItemById(id);
+        if (deleted) removedCount++;
+      }
+      _fridgeItems = FridgeService.instance.getAllItems();
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isConsumingIngredients = false;
+        });
+      }
+    }
+
+    if (!context.mounted) return;
+
+    final text = removedCount == 0
+        ? 'No ingredients were removed.'
+        : 'Removed $removedCount ingredient item${removedCount == 1 ? '' : 's'} from fridge.';
+
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+  }
 
   @override
   Widget build(BuildContext context) {
-    // Get recipe from arguments
-    final recipe = ModalRoute.of(context)!.settings.arguments as Recipe;
-
-    // Calculate in-fridge status for ingredients
-    final fridgeItems = FridgeService.instance.getAllItems();
-    final fridgeItemNames = fridgeItems
-        .map((i) => i.name.toLowerCase())
-        .toSet();
-
-    // Helper to check if ingredient is in fridge
-    bool isInFridge(String ingredientName) {
-      final nameLower = ingredientName.toLowerCase();
-      // Simple containment check
-      return fridgeItemNames.any(
-        (fridgeName) =>
-            fridgeName.contains(nameLower) || nameLower.contains(fridgeName),
-      );
-    }
-
+    final recipe = _resolveRecipe(context);
     final ingredientsInFridgeCount = recipe.ingredients
-        .where((i) => isInFridge(i.name))
+        .where((ingredient) => _isInFridge(ingredient.name, _fridgeItems))
         .length;
 
     return Scaffold(
@@ -254,7 +367,10 @@ class RecipePreparationGuideScreen extends StatelessWidget {
                                   child: _IngredientItem(
                                     name: ingredient.name,
                                     amount: ingredient.amount,
-                                    inFridge: isInFridge(ingredient.name),
+                                    inFridge: _isInFridge(
+                                      ingredient.name,
+                                      _fridgeItems,
+                                    ),
                                   ),
                                 );
                               }),
@@ -343,7 +459,10 @@ class RecipePreparationGuideScreen extends StatelessWidget {
                 ),
               ),
               child: ElevatedButton(
-                onPressed: () {},
+                key: const ValueKey('recipe_cooked_button'),
+                onPressed: _isConsumingIngredients
+                    ? null
+                    : () => _consumeUsedIngredients(context, recipe),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF13EC13),
                   foregroundColor: const Color(0xFF102210),
@@ -354,39 +473,51 @@ class RecipePreparationGuideScreen extends StatelessWidget {
                   elevation: 8,
                   shadowColor: const Color(0xFF13EC13).withOpacity(0.4),
                 ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.play_circle_filled),
-                    const SizedBox(width: 8),
-                    const Text(
-                      'Start Cooking',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    if (recipe.prepTime.isNotEmpty)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          recipe.prepTime,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
+                child: _isConsumingIngredients
+                    ? Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: const [
+                          SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
                           ),
-                        ),
+                          SizedBox(width: 10),
+                          Text(
+                            'Updating fridge...',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      )
+                    : Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.check),
+                          const SizedBox(width: 8),
+                          const Text(
+                            'Cooked',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          if (recipe.prepTime.isNotEmpty)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            ),
+                        ],
                       ),
-                  ],
-                ),
               ),
             ),
           ),
