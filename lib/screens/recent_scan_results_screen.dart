@@ -10,6 +10,7 @@ class RecentScanResultsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final service = ReceiptService.instance;
     final receipts = service.getAllReceipts();
+    final receiptId = ModalRoute.of(context)?.settings.arguments as String?;
 
     // Show the most recent receipt (or first available)
     if (receipts.isEmpty) {
@@ -20,7 +21,9 @@ class RecentScanResultsScreen extends StatelessWidget {
       );
     }
 
-    final receipt = receipts.first;
+    final receipt = receiptId != null
+        ? (service.getReceiptById(receiptId) ?? receipts.first)
+        : receipts.first;
     final recognizedItems = receipt.items.where((i) => !i.isUnknown).toList();
     final unknownItems = receipt.unknownItems;
 

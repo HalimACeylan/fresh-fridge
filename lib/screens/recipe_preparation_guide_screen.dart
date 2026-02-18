@@ -68,6 +68,17 @@ class _RecipePreparationGuideScreenState
     return usedIds;
   }
 
+  void _showStatusSnackBar(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 110),
+      ),
+    );
+  }
+
   Future<void> _consumeUsedIngredients(
     BuildContext context,
     Recipe recipe,
@@ -77,10 +88,8 @@ class _RecipePreparationGuideScreenState
     final usedItemIds = _findUsedItemIds(recipe, _fridgeItems);
 
     if (usedItemIds.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('No matching fridge ingredients were found to remove.'),
-        ),
+      _showStatusSnackBar(
+        'No matching fridge ingredients were found to remove.',
       );
       return;
     }
@@ -134,7 +143,7 @@ class _RecipePreparationGuideScreenState
         ? 'No ingredients were removed.'
         : 'Removed $removedCount ingredient item${removedCount == 1 ? '' : 's'} from fridge.';
 
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+    _showStatusSnackBar(text);
   }
 
   @override

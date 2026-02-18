@@ -1,5 +1,10 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:fridge_app/routes.dart';
+import 'package:fridge_app/services/receipt_scan_service.dart';
+import 'package:fridge_app/services/receipt_service.dart';
+import 'package:image_picker/image_picker.dart';
 
 class ScanReceiptScreen extends StatefulWidget {
   const ScanReceiptScreen({super.key});
@@ -11,6 +16,8 @@ class ScanReceiptScreen extends StatefulWidget {
 class _ScanReceiptScreenState extends State<ScanReceiptScreen>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
+  final ImagePicker _imagePicker = ImagePicker();
+  bool _isProcessing = false;
 
   @override
   void initState() {
@@ -24,11 +31,175 @@ class _ScanReceiptScreenState extends State<ScanReceiptScreen>
   @override
   void dispose() {
     _controller.dispose();
+    ReceiptScanService.instance.close();
     super.dispose();
+  }
+
+  Future<void> _pickImageAndPreview(ImageSource source) async {
+    if (_isProcessing) return;
+
+    try {
+      final pickedFile = await _imagePicker.pickImage(
+        source: source,
+        imageQuality: 95,
+        preferredCameraDevice: CameraDevice.rear,
+      );
+
+      if (pickedFile == null || !mounted) return;
+
+      final shouldProcess = await _showReceiptPreview(
+        imagePath: pickedFile.path,
+        source: source,
+      );
+
+      if (shouldProcess == true) {
+        await _processSelectedReceiptImage(pickedFile.path);
+      }
+    } catch (e) {
+      _showFailureSnackBar('Could not open image picker: $e');
+    }
+  }
+
+  Future<void> _processSelectedReceiptImage(String imagePath) async {
+    if (_isProcessing) return;
+
+    setState(() {
+      _isProcessing = true;
+    });
+
+    try {
+      final receipt = await ReceiptScanService.instance
+          .processAndStoreImagePath(imagePath);
+      if (!mounted) return;
+
+      await Navigator.pushNamed(
+        context,
+        AppRoutes.recentScanResults,
+        arguments: receipt.id,
+      );
+    } on ReceiptScanCancelledException {
+      // User canceled before processing.
+    } catch (e) {
+      _showFailureSnackBar('Scan failed: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isProcessing = false;
+        });
+      }
+    }
+  }
+
+  Future<bool?> _showReceiptPreview({
+    required String imagePath,
+    required ImageSource source,
+  }) {
+    return showModalBottomSheet<bool>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        final mediaSize = MediaQuery.sizeOf(sheetContext);
+
+        return SafeArea(
+          child: Container(
+            constraints: BoxConstraints(maxHeight: mediaSize.height * 0.88),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+              child: Column(
+                mainAxisSize: MainAxisSize.max,
+                children: [
+                  Row(
+                    children: [
+                      const Text(
+                        'Receipt Preview',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const Spacer(),
+                      IconButton(
+                        onPressed: () => Navigator.pop(sheetContext, false),
+                        icon: const Icon(Icons.close),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Expanded(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: Image.file(
+                        File(imagePath),
+                        width: double.infinity,
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, __, ___) => Container(
+                          color: const Color(0xFFF3F3F3),
+                          child: const Center(
+                            child: Text(
+                              'Preview unavailable',
+                              style: TextStyle(fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.pop(sheetContext, false),
+                          style: OutlinedButton.styleFrom(
+                            minimumSize: const Size.fromHeight(50),
+                          ),
+                          child: Text(
+                            source == ImageSource.camera
+                                ? 'Retake'
+                                : 'Choose Another',
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () => Navigator.pop(sheetContext, true),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF13EC13),
+                            foregroundColor: const Color(0xFF102210),
+                            minimumSize: const Size.fromHeight(50),
+                          ),
+                          child: const Text('Use Photo'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _showFailureSnackBar(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final receiptCount = ReceiptService.instance.getAllReceipts().length;
+    final receiptBadgeText = receiptCount > 99 ? '99+' : '$receiptCount';
+
     return Scaffold(
       backgroundColor: Colors.black,
       body: Stack(
@@ -225,35 +396,37 @@ class _ScanReceiptScreenState extends State<ScanReceiptScreen>
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       // Gallery
-                      Container(
-                        width: 48,
-                        height: 48,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(8),
-                          image: const DecorationImage(
-                            image: AssetImage(
-                              'assets/images/gallery_thumb.png',
-                            ),
-                            fit: BoxFit.cover,
-                          ),
-                        ),
+                      GestureDetector(
+                        onTap: _isProcessing
+                            ? null
+                            : () => _pickImageAndPreview(ImageSource.gallery),
                         child: Container(
-                          color: Colors.black26,
-                          child: const Icon(
-                            Icons.photo_library,
-                            color: Colors.white,
-                            size: 24,
+                          width: 48,
+                          height: 48,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(8),
+                            image: const DecorationImage(
+                              image: AssetImage(
+                                'assets/images/gallery_thumb.png',
+                              ),
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                          child: Container(
+                            color: Colors.black26,
+                            child: const Icon(
+                              Icons.photo_library,
+                              color: Colors.white,
+                              size: 24,
+                            ),
                           ),
                         ),
                       ),
                       // Shutter
                       GestureDetector(
-                        onTap: () {
-                          Navigator.pushNamed(
-                            context,
-                            AppRoutes.recentScanResults,
-                          );
-                        },
+                        onTap: _isProcessing
+                            ? null
+                            : () => _pickImageAndPreview(ImageSource.camera),
                         child: Container(
                           width: 80,
                           height: 80,
@@ -272,50 +445,70 @@ class _ScanReceiptScreenState extends State<ScanReceiptScreen>
                                 color: Color(0xFF13EC13),
                                 shape: BoxShape.circle,
                               ),
-                              child: const Icon(
-                                Icons.camera_alt,
-                                color: Color(0xFF102210),
-                                size: 32,
-                              ),
+                              child: _isProcessing
+                                  ? const Padding(
+                                      padding: EdgeInsets.all(18.0),
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 3,
+                                        color: Color(0xFF102210),
+                                      ),
+                                    )
+                                  : const Icon(
+                                      Icons.camera_alt,
+                                      color: Color(0xFF102210),
+                                      size: 32,
+                                    ),
                             ),
                           ),
                         ),
                       ),
                       // Recent Scans
-                      Stack(
-                        children: [
-                          Container(
-                            width: 48,
-                            height: 48,
-                            decoration: BoxDecoration(
-                              color: Colors.transparent,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: const Icon(
-                              Icons.receipt_long,
-                              size: 32,
-                              color: Colors.grey,
-                            ),
-                          ),
-                          Positioned(
-                            top: 0,
-                            right: 0,
-                            child: Container(
-                              padding: const EdgeInsets.all(4),
-                              decoration: const BoxDecoration(
-                                color: Color(0xFF13EC13),
-                                shape: BoxShape.circle,
+                      GestureDetector(
+                        onTap: _isProcessing
+                            ? null
+                            : () => Navigator.pushNamed(
+                                context,
+                                AppRoutes.recentScanResults,
                               ),
-                              child: const Text(
-                                '3',
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
+                        child: Stack(
+                          children: [
+                            Container(
+                              width: 48,
+                              height: 48,
+                              decoration: BoxDecoration(
+                                color: Colors.transparent,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Icon(
+                                Icons.receipt_long,
+                                size: 32,
+                                color: Colors.grey,
+                              ),
+                            ),
+                            if (receiptCount > 0)
+                              Positioned(
+                                top: 0,
+                                right: 0,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 3,
+                                  ),
+                                  decoration: const BoxDecoration(
+                                    color: Color(0xFF13EC13),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Text(
+                                    receiptBadgeText,
+                                    style: const TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
                                 ),
                               ),
-                            ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ],
                   ),
@@ -323,6 +516,28 @@ class _ScanReceiptScreenState extends State<ScanReceiptScreen>
               ),
             ),
           ),
+          if (_isProcessing)
+            Positioned.fill(
+              child: Container(
+                color: Colors.black.withValues(alpha: 0.55),
+                child: const Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircularProgressIndicator(color: Color(0xFF13EC13)),
+                      SizedBox(height: 12),
+                      Text(
+                        'Processing receipt...',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );
