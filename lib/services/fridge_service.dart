@@ -299,6 +299,26 @@ class FridgeService {
     await _syncFromCloud(seedCloudIfEmpty: false);
   }
 
+  /// Clears all fridge items from the active household collection.
+  Future<void> clearCloudForActiveHousehold({
+    bool clearLocalCache = true,
+  }) async {
+    if (_firebaseEnabled) {
+      final existingDocs = await _fridgeCollection.get();
+      for (var i = 0; i < existingDocs.docs.length; i += 400) {
+        final batch = _firestore!.batch();
+        for (final doc in existingDocs.docs.skip(i).take(400)) {
+          batch.delete(doc.reference);
+        }
+        await batch.commit();
+      }
+    }
+
+    if (clearLocalCache) {
+      _items.clear();
+    }
+  }
+
   Future<void> _seedCloudFromLocal({required bool overwrite}) async {
     if (!_firebaseEnabled) return;
 

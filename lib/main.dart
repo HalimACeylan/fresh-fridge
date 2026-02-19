@@ -14,7 +14,7 @@ Future<void> main() async {
 }
 
 Future<void> _initializeFirebaseAndServices() async {
-  const seedMode = String.fromEnvironment(
+  const seedModeEnv = String.fromEnvironment(
     'FIREBASE_SEED_MODE',
     defaultValue: 'if-empty',
   );
@@ -26,8 +26,15 @@ Future<void> _initializeFirebaseAndServices() async {
 
     await UserHouseholdService.instance.initialize();
 
+    final seedMode = switch (seedModeEnv.toLowerCase()) {
+      'overwrite' => 'overwrite',
+      'skip' => 'skip',
+      'clear' => 'clear',
+      _ => 'if-empty',
+    };
+
     final forceReseed = seedMode == 'overwrite';
-    final seedIfEmpty = seedMode != 'skip';
+    final seedIfEmpty = seedMode == 'if-empty';
 
     await FridgeService.instance.initialize(
       seedCloudIfEmpty: seedIfEmpty,
@@ -37,6 +44,11 @@ Future<void> _initializeFirebaseAndServices() async {
       seedCloudIfEmpty: seedIfEmpty,
       forceReseed: forceReseed,
     );
+
+    if (seedMode == 'clear') {
+      await FridgeService.instance.clearCloudForActiveHousehold();
+      await ReceiptService.instance.clearCloudForActiveHousehold();
+    }
   } catch (_) {
     // App continues with in-memory sample data when Firebase is unavailable.
   }

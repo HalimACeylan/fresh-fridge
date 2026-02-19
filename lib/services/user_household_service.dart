@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart';
 
 /// Handles authenticated user identity and household bootstrapping.
 ///
@@ -41,6 +42,10 @@ class UserHouseholdService {
       _auth = FirebaseAuth.instance;
       _firestore = FirebaseFirestore.instance;
       final user = await _ensureAuthenticatedUser();
+      if (user == null) {
+        _firebaseEnabled = false;
+        return;
+      }
       _userId = user.uid;
       await _ensureUserAndHouseholdDocuments(user);
       _firebaseEnabled = true;
@@ -49,17 +54,35 @@ class UserHouseholdService {
     }
   }
 
-  Future<User> _ensureAuthenticatedUser() async {
+  Future<User?> _ensureAuthenticatedUser() async {
     final auth = _auth!;
     final currentUser = auth.currentUser;
     if (currentUser != null) return currentUser;
 
-    final credential = await auth.signInAnonymously();
-    final signedInUser = credential.user;
-    if (signedInUser == null) {
-      throw StateError('Failed to authenticate user.');
+    try {
+      final credential = await auth.signInAnonymously();
+      final signedInUser = credential.user;
+      if (signedInUser == null) {
+        debugPrint(
+          'Firebase auth returned null user for anonymous sign-in; '
+          'falling back to local-only mode.',
+        );
+        return null;
+      }
+      return signedInUser;
+    } on FirebaseAuthException catch (e) {
+      debugPrint(
+        'Anonymous auth failed (${e.code}): ${e.message}. '
+        'Falling back to local-only mode.',
+      );
+      return null;
+    } catch (e) {
+      debugPrint(
+        'Anonymous auth failed with unexpected error: $e. '
+        'Falling back to local-only mode.',
+      );
+      return null;
     }
-    return signedInUser;
   }
 
   Future<void> _ensureUserAndHouseholdDocuments(User user) async {

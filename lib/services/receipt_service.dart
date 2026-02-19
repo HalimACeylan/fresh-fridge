@@ -232,6 +232,26 @@ class ReceiptService {
     await _syncFromCloud(seedCloudIfEmpty: false);
   }
 
+  /// Clears all receipts from the active household collection.
+  Future<void> clearCloudForActiveHousehold({
+    bool clearLocalCache = true,
+  }) async {
+    if (_firebaseEnabled) {
+      final existingDocs = await _receiptsCollection.get();
+      for (var i = 0; i < existingDocs.docs.length; i += 400) {
+        final batch = _firestore!.batch();
+        for (final doc in existingDocs.docs.skip(i).take(400)) {
+          batch.delete(doc.reference);
+        }
+        await batch.commit();
+      }
+    }
+
+    if (clearLocalCache) {
+      _receipts.clear();
+    }
+  }
+
   Future<void> _seedCloudFromLocal({required bool overwrite}) async {
     if (!_firebaseEnabled) return;
 
@@ -464,9 +484,15 @@ class ReceiptService {
     final newItems = <FridgeItem>[];
 
     for (final item in receipt.items) {
-      if (item.isUnknown || item.isMatched) continue;
+      if (item.isUnknown) continue;
 
-      final category = item.suggestedCategory ?? suggestCategory(item.name);
+      final matchedItem = item.matchedFridgeItemId == null
+          ? null
+          : fridgeService.getItemById(item.matchedFridgeItemId!);
+      final category =
+          item.suggestedCategory ??
+          matchedItem?.category ??
+          suggestCategory(item.name);
 
       final fridgeItem = FridgeItem(
         id: 'auto_${DateTime.now().millisecondsSinceEpoch}_${item.id}',
@@ -482,6 +508,14 @@ class ReceiptService {
 
       fridgeService.addItem(fridgeItem);
       newItems.add(fridgeItem);
+    }
+
+    if (newItems.isNotEmpty) {
+      final updatedItems = receipt.items.map((item) {
+        if (item.isUnknown) return item;
+        return item.copyWith(isVerified: true);
+      }).toList();
+      updateReceipt(receipt.copyWith(items: updatedItems));
     }
 
     return newItems;
