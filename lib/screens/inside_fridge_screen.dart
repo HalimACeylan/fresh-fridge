@@ -15,6 +15,18 @@ class InsideFridgeScreen extends StatefulWidget {
 }
 
 class _InsideFridgeScreenState extends State<InsideFridgeScreen> {
+  @override
+  void initState() {
+    super.initState();
+    _refreshFromCloud();
+  }
+
+  Future<void> _refreshFromCloud() async {
+    await FridgeService.instance.refreshFromCloud();
+    if (!mounted) return;
+    setState(() {});
+  }
+
   Future<void> _openItemDetails(FridgeItem item) async {
     final didDelete = await Navigator.pushNamed(
       context,
@@ -24,7 +36,7 @@ class _InsideFridgeScreenState extends State<InsideFridgeScreen> {
 
     if (!mounted || didDelete != true) return;
 
-    setState(() {});
+    await _refreshFromCloud();
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text('${item.name} removed from fridge')));
@@ -68,7 +80,7 @@ class _InsideFridgeScreenState extends State<InsideFridgeScreen> {
       return;
     }
 
-    setState(() {});
+    await _refreshFromCloud();
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text('${item.name} removed from fridge')));

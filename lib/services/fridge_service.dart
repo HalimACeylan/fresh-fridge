@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:fridge_app/models/fridge_item.dart';
 import 'package:fridge_app/models/units.dart';
+import 'package:fridge_app/services/user_household_service.dart';
 
 /// In-memory fridge service pre-populated with sample data.
 ///
@@ -15,8 +16,8 @@ class FridgeService {
   // Singleton
   FridgeService._();
   static final FridgeService instance = FridgeService._();
-  static const String _householdId = 'default';
   static const String _rootCollection = 'households';
+  static const String _nameLowerField = 'nameLower';
 
   FirebaseFirestore? _firestore;
   bool _firebaseEnabled = false;
@@ -241,12 +242,17 @@ class FridgeService {
     ),
   ];
 
+  String get _activeHouseholdId => UserHouseholdService.instance.householdId;
+
   CollectionReference<Map<String, dynamic>> get _fridgeCollection => _firestore!
       .collection(_rootCollection)
-      .doc(_householdId)
+      .doc(_activeHouseholdId)
       .collection('fridge_items');
 
-  Future<void> initialize({bool seedCloudIfEmpty = true}) async {
+  Future<void> initialize({
+    bool seedCloudIfEmpty = true,
+    bool forceReseed = false,
+  }) async {
     if (_isInitialized) return;
     _isInitialized = true;
 
@@ -255,6 +261,9 @@ class FridgeService {
     try {
       _firestore = FirebaseFirestore.instance;
       _firebaseEnabled = true;
+      if (forceReseed) {
+        await _seedCloudFromLocal(overwrite: true);
+      }
       await _syncFromCloud(seedCloudIfEmpty: seedCloudIfEmpty);
     } catch (_) {
       _firebaseEnabled = false;
@@ -272,25 +281,40 @@ class FridgeService {
 
     if (query.docs.isEmpty) {
       if (seedCloudIfEmpty) {
-        await _seedCloudFromLocal();
+        await _seedCloudFromLocal(overwrite: false);
       }
       return;
     }
 
-    final cloudItems = query.docs.map((doc) {
-      final data = _normalizeFirestoreMap(doc.data(), doc.id);
-      return FridgeItem.fromMap(data);
-    }).toList();
+    final cloudItems = _parseCloudSnapshot(query.docs);
 
     _items
       ..clear()
       ..addAll(cloudItems);
   }
 
-  Future<void> _seedCloudFromLocal() async {
+  Future<void> seedCloudFromLocal({bool overwrite = false}) async {
+    if (!_firebaseEnabled) return;
+    await _seedCloudFromLocal(overwrite: overwrite);
+    await _syncFromCloud(seedCloudIfEmpty: false);
+  }
+
+  Future<void> _seedCloudFromLocal({required bool overwrite}) async {
+    if (!_firebaseEnabled) return;
+
     final batch = _firestore!.batch();
+    if (overwrite) {
+      final existingDocs = await _fridgeCollection.get();
+      for (final doc in existingDocs.docs) {
+        batch.delete(doc.reference);
+      }
+    }
+
     for (final item in _items) {
-      batch.set(_fridgeCollection.doc(item.id), item.toMap());
+      batch.set(
+        _fridgeCollection.doc(item.id),
+        _toFirestoreMap(item, includeCreatedAt: true),
+      );
     }
     await batch.commit();
   }
@@ -300,9 +324,36 @@ class FridgeService {
   /// All items in the fridge.
   List<FridgeItem> getAllItems() => List.unmodifiable(_items);
 
+  /// Read all items directly from Firestore.
+  Future<List<FridgeItem>> readAllFromCloud({bool refreshCache = true}) async {
+    if (!_firebaseEnabled) return getAllItems();
+
+    final query = await _fridgeCollection.get();
+    final cloudItems = _parseCloudSnapshot(query.docs);
+
+    if (refreshCache) {
+      _items
+        ..clear()
+        ..addAll(cloudItems);
+    }
+    return cloudItems;
+  }
+
   /// Items filtered by category.
   List<FridgeItem> getItemsByCategory(FridgeCategory category) =>
       _items.where((item) => item.category == category).toList();
+
+  /// Query items by category directly from Firestore.
+  Future<List<FridgeItem>> queryItemsByCategoryFromCloud(
+    FridgeCategory category,
+  ) async {
+    if (!_firebaseEnabled) return getItemsByCategory(category);
+
+    final query = await _fridgeCollection
+        .where('category', isEqualTo: category.name)
+        .get();
+    return _parseCloudSnapshot(query.docs);
+  }
 
   /// Items expiring within 2 days (urgent).
   List<FridgeItem> getExpiringItems() => _items
@@ -355,29 +406,33 @@ class FridgeService {
 
   /// Add a new item to the fridge.
   void addItem(FridgeItem item) {
+    final normalizedItem = _normalizeForActiveHousehold(item);
     final existingIndex = _items.indexWhere(
-      (existing) => existing.id == item.id,
+      (existing) => existing.id == normalizedItem.id,
     );
+
+    final isNewItem = existingIndex == -1;
     if (existingIndex == -1) {
-      _items.add(item);
+      _items.add(normalizedItem);
     } else {
-      _items[existingIndex] = item;
+      _items[existingIndex] = normalizedItem;
     }
 
     if (_firebaseEnabled) {
-      unawaited(_upsertItem(item));
+      unawaited(_upsertItem(normalizedItem, includeCreatedAt: isNewItem));
     }
   }
 
   /// Update an existing item.
   void updateItem(FridgeItem updated) {
-    final index = _items.indexWhere((item) => item.id == updated.id);
+    final normalizedItem = _normalizeForActiveHousehold(updated);
+    final index = _items.indexWhere((item) => item.id == normalizedItem.id);
     if (index != -1) {
-      _items[index] = updated;
+      _items[index] = normalizedItem;
     }
 
     if (_firebaseEnabled) {
-      unawaited(_upsertItem(updated));
+      unawaited(_upsertItem(normalizedItem, includeCreatedAt: false));
     }
   }
 
@@ -420,8 +475,43 @@ class FridgeService {
         .toList();
   }
 
-  Future<void> _upsertItem(FridgeItem item) async {
-    await _fridgeCollection.doc(item.id).set(item.toMap());
+  /// Search items by name directly from Firestore.
+  Future<List<FridgeItem>> queryItemsByNameFromCloud(
+    String query, {
+    int limit = 30,
+  }) async {
+    final normalizedQuery = query.trim().toLowerCase();
+    if (normalizedQuery.isEmpty || !_firebaseEnabled) {
+      return searchItems(query);
+    }
+
+    try {
+      final snapshot = await _fridgeCollection
+          .orderBy(_nameLowerField)
+          .startAt([normalizedQuery])
+          .endAt(['$normalizedQuery\uf8ff'])
+          .limit(limit)
+          .get();
+      final results = _parseCloudSnapshot(snapshot.docs);
+      if (results.isNotEmpty) return results;
+    } catch (_) {
+      // Fallback to local cache for first-time records without the index field.
+    }
+
+    await refreshFromCloud();
+    return searchItems(query);
+  }
+
+  Future<void> _upsertItem(
+    FridgeItem item, {
+    required bool includeCreatedAt,
+  }) async {
+    await _fridgeCollection
+        .doc(item.id)
+        .set(
+          _toFirestoreMap(item, includeCreatedAt: includeCreatedAt),
+          SetOptions(merge: true),
+        );
   }
 
   Future<void> _deleteItemFromCloud(String id) async {
@@ -445,5 +535,35 @@ class FridgeService {
     if (value is Timestamp) return value.millisecondsSinceEpoch;
     if (value is DateTime) return value.millisecondsSinceEpoch;
     return null;
+  }
+
+  List<FridgeItem> _parseCloudSnapshot(
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
+  ) {
+    return docs.map((doc) {
+      final data = _normalizeFirestoreMap(doc.data(), doc.id);
+      return FridgeItem.fromMap(data);
+    }).toList();
+  }
+
+  FridgeItem _normalizeForActiveHousehold(FridgeItem item) {
+    final householdId = _activeHouseholdId;
+    if (item.householdId == householdId) return item;
+    return item.copyWith(householdId: householdId);
+  }
+
+  Map<String, dynamic> _toFirestoreMap(
+    FridgeItem item, {
+    required bool includeCreatedAt,
+  }) {
+    final normalizedItem = _normalizeForActiveHousehold(item);
+    final map = normalizedItem.toMap();
+    map[_nameLowerField] = normalizedItem.name.toLowerCase();
+    map.addAll(
+      UserHouseholdService.instance.buildAuditFields(
+        includeCreatedAt: includeCreatedAt,
+      ),
+    );
+    return map;
   }
 }

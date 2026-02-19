@@ -20,8 +20,8 @@ class _SuggestedRecipesScreenState extends State<SuggestedRecipesScreen> {
   late final TextEditingController _recipeSearchController;
   late final TextEditingController _ingredientSearchController;
   late final FocusNode _ingredientFocusNode;
-  late final List<FridgeItem> _fridgeIngredients;
-  late final List<Recipe> _recipes;
+  late List<FridgeItem> _fridgeIngredients;
+  late List<Recipe> _recipes;
 
   final LinkedHashSet<String> _selectedIngredientIds = LinkedHashSet<String>();
   String _recipeSearchQuery = '';
@@ -34,7 +34,10 @@ class _SuggestedRecipesScreenState extends State<SuggestedRecipesScreen> {
     _ingredientSearchController = TextEditingController();
     _ingredientFocusNode = FocusNode();
     _ingredientFocusNode.addListener(() => setState(() {}));
+    _fridgeIngredients = const [];
+    _recipes = const [];
     _loadData();
+    _refreshFromCloud();
   }
 
   @override
@@ -55,6 +58,14 @@ class _SuggestedRecipesScreenState extends State<SuggestedRecipesScreen> {
     _fridgeIngredients = uniqueByName.values.toList()
       ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
     _recipes = RecipeService.instance.getSuggestedRecipes();
+  }
+
+  Future<void> _refreshFromCloud() async {
+    await FridgeService.instance.refreshFromCloud();
+    if (!mounted) return;
+    setState(() {
+      _loadData();
+    });
   }
 
   List<FridgeItem> get _selectedIngredients {

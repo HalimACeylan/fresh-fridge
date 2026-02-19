@@ -6,6 +6,7 @@ import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart
 
 import 'package:fridge_app/models/receipt.dart';
 import 'package:fridge_app/services/receipt_service.dart';
+import 'package:fridge_app/services/user_household_service.dart';
 
 class ReceiptScanCancelledException implements Exception {
   const ReceiptScanCancelledException();
@@ -126,6 +127,7 @@ class ReceiptScanService {
       tax: tax,
       total: total,
       imageUrl: imagePath,
+      householdId: UserHouseholdService.instance.householdId,
     );
   }
 
