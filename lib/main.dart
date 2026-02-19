@@ -1,9 +1,27 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:fridge_app/firebase_options.dart';
 import 'package:fridge_app/routes.dart';
+import 'package:fridge_app/services/fridge_service.dart';
+import 'package:fridge_app/services/receipt_service.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await _initializeFirebaseAndServices();
   runApp(const FridgeApp());
+}
+
+Future<void> _initializeFirebaseAndServices() async {
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+    await FridgeService.instance.initialize();
+    await ReceiptService.instance.initialize();
+  } catch (_) {
+    // App continues with in-memory sample data when Firebase is unavailable.
+  }
 }
 
 class FridgeApp extends StatelessWidget {

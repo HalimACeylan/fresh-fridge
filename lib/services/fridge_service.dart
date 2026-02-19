@@ -1,3 +1,7 @@
+import 'dart:async';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:fridge_app/models/fridge_item.dart';
 import 'package:fridge_app/models/units.dart';
 
@@ -11,6 +15,12 @@ class FridgeService {
   // Singleton
   FridgeService._();
   static final FridgeService instance = FridgeService._();
+  static const String _householdId = 'default';
+  static const String _rootCollection = 'households';
+
+  FirebaseFirestore? _firestore;
+  bool _firebaseEnabled = false;
+  bool _isInitialized = false;
 
   // ── Sample data ──────────────────────────────────────────────────
 
@@ -231,6 +241,60 @@ class FridgeService {
     ),
   ];
 
+  CollectionReference<Map<String, dynamic>> get _fridgeCollection => _firestore!
+      .collection(_rootCollection)
+      .doc(_householdId)
+      .collection('fridge_items');
+
+  Future<void> initialize({bool seedCloudIfEmpty = true}) async {
+    if (_isInitialized) return;
+    _isInitialized = true;
+
+    if (Firebase.apps.isEmpty) return;
+
+    try {
+      _firestore = FirebaseFirestore.instance;
+      _firebaseEnabled = true;
+      await _syncFromCloud(seedCloudIfEmpty: seedCloudIfEmpty);
+    } catch (_) {
+      _firebaseEnabled = false;
+      _firestore = null;
+    }
+  }
+
+  Future<void> refreshFromCloud() async {
+    if (!_firebaseEnabled) return;
+    await _syncFromCloud(seedCloudIfEmpty: false);
+  }
+
+  Future<void> _syncFromCloud({required bool seedCloudIfEmpty}) async {
+    final query = await _fridgeCollection.get();
+
+    if (query.docs.isEmpty) {
+      if (seedCloudIfEmpty) {
+        await _seedCloudFromLocal();
+      }
+      return;
+    }
+
+    final cloudItems = query.docs.map((doc) {
+      final data = _normalizeFirestoreMap(doc.data(), doc.id);
+      return FridgeItem.fromMap(data);
+    }).toList();
+
+    _items
+      ..clear()
+      ..addAll(cloudItems);
+  }
+
+  Future<void> _seedCloudFromLocal() async {
+    final batch = _firestore!.batch();
+    for (final item in _items) {
+      batch.set(_fridgeCollection.doc(item.id), item.toMap());
+    }
+    await batch.commit();
+  }
+
   // ── Read operations ──────────────────────────────────────────────
 
   /// All items in the fridge.
@@ -291,7 +355,18 @@ class FridgeService {
 
   /// Add a new item to the fridge.
   void addItem(FridgeItem item) {
-    _items.add(item);
+    final existingIndex = _items.indexWhere(
+      (existing) => existing.id == item.id,
+    );
+    if (existingIndex == -1) {
+      _items.add(item);
+    } else {
+      _items[existingIndex] = item;
+    }
+
+    if (_firebaseEnabled) {
+      unawaited(_upsertItem(item));
+    }
   }
 
   /// Update an existing item.
@@ -299,6 +374,10 @@ class FridgeService {
     final index = _items.indexWhere((item) => item.id == updated.id);
     if (index != -1) {
       _items[index] = updated;
+    }
+
+    if (_firebaseEnabled) {
+      unawaited(_upsertItem(updated));
     }
   }
 
@@ -310,12 +389,26 @@ class FridgeService {
 
   /// Remove an item by ID.
   void deleteItem(String id) {
-    _deleteItemInternal(id);
+    final deleted = _deleteItemInternal(id);
+    if (deleted && _firebaseEnabled) {
+      unawaited(_deleteItemFromCloud(id));
+    }
   }
 
   /// Async delete API kept intentionally for future Firebase writes.
-  Future<bool> deleteItemById(String id) {
-    return Future.value(_deleteItemInternal(id));
+  Future<bool> deleteItemById(String id) async {
+    final deleted = _deleteItemInternal(id);
+    if (!deleted) return false;
+
+    if (_firebaseEnabled) {
+      try {
+        await _deleteItemFromCloud(id);
+      } catch (_) {
+        return false;
+      }
+    }
+
+    return true;
   }
 
   /// Search items by name (case-insensitive).
@@ -325,5 +418,32 @@ class FridgeService {
     return _items
         .where((item) => item.name.toLowerCase().contains(lower))
         .toList();
+  }
+
+  Future<void> _upsertItem(FridgeItem item) async {
+    await _fridgeCollection.doc(item.id).set(item.toMap());
+  }
+
+  Future<void> _deleteItemFromCloud(String id) async {
+    await _fridgeCollection.doc(id).delete();
+  }
+
+  Map<String, dynamic> _normalizeFirestoreMap(
+    Map<String, dynamic> map,
+    String docId,
+  ) {
+    final normalized = Map<String, dynamic>.from(map);
+    normalized['id'] = (normalized['id'] as String?) ?? docId;
+    normalized['addedDate'] = _dateToEpochMillis(normalized['addedDate']);
+    normalized['expiryDate'] = _dateToEpochMillis(normalized['expiryDate']);
+    return normalized;
+  }
+
+  int? _dateToEpochMillis(dynamic value) {
+    if (value == null) return null;
+    if (value is int) return value;
+    if (value is Timestamp) return value.millisecondsSinceEpoch;
+    if (value is DateTime) return value.millisecondsSinceEpoch;
+    return null;
   }
 }

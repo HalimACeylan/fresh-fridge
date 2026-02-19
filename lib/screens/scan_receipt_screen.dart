@@ -137,7 +137,7 @@ class _ScanReceiptScreenState extends State<ScanReceiptScreen>
                         File(imagePath),
                         width: double.infinity,
                         fit: BoxFit.contain,
-                        errorBuilder: (_, __, ___) => Container(
+                        errorBuilder: (_, _, _) => Container(
                           color: const Color(0xFFF3F3F3),
                           child: const Center(
                             child: Text(

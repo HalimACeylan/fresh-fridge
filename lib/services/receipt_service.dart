@@ -1,3 +1,7 @@
+import 'dart:async';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:fridge_app/models/fridge_item.dart';
 import 'package:fridge_app/models/receipt.dart';
 import 'package:fridge_app/models/units.dart';
@@ -11,6 +15,12 @@ class ReceiptService {
   // Singleton
   ReceiptService._();
   static final ReceiptService instance = ReceiptService._();
+  static const String _householdId = 'default';
+  static const String _rootCollection = 'households';
+
+  FirebaseFirestore? _firestore;
+  bool _firebaseEnabled = false;
+  bool _isInitialized = false;
 
   // ── Known category mappings ──────────────────────────────────────
   // Maps common receipt keywords → fridge categories for auto-suggestion.
@@ -162,6 +172,61 @@ class ReceiptService {
     ),
   ];
 
+  CollectionReference<Map<String, dynamic>> get _receiptsCollection =>
+      _firestore!
+          .collection(_rootCollection)
+          .doc(_householdId)
+          .collection('receipts');
+
+  Future<void> initialize({bool seedCloudIfEmpty = true}) async {
+    if (_isInitialized) return;
+    _isInitialized = true;
+
+    if (Firebase.apps.isEmpty) return;
+
+    try {
+      _firestore = FirebaseFirestore.instance;
+      _firebaseEnabled = true;
+      await _syncFromCloud(seedCloudIfEmpty: seedCloudIfEmpty);
+    } catch (_) {
+      _firebaseEnabled = false;
+      _firestore = null;
+    }
+  }
+
+  Future<void> refreshFromCloud() async {
+    if (!_firebaseEnabled) return;
+    await _syncFromCloud(seedCloudIfEmpty: false);
+  }
+
+  Future<void> _syncFromCloud({required bool seedCloudIfEmpty}) async {
+    final query = await _receiptsCollection.get();
+
+    if (query.docs.isEmpty) {
+      if (seedCloudIfEmpty) {
+        await _seedCloudFromLocal();
+      }
+      return;
+    }
+
+    final cloudReceipts = query.docs.map((doc) {
+      final data = _normalizeReceiptMap(doc.data(), doc.id);
+      return Receipt.fromMap(data);
+    }).toList();
+
+    _receipts
+      ..clear()
+      ..addAll(cloudReceipts);
+  }
+
+  Future<void> _seedCloudFromLocal() async {
+    final batch = _firestore!.batch();
+    for (final receipt in _receipts) {
+      batch.set(_receiptsCollection.doc(receipt.id), receipt.toMap());
+    }
+    await batch.commit();
+  }
+
   // ── Read operations ──────────────────────────────────────────────
 
   /// All stored receipts.
@@ -184,7 +249,16 @@ class ReceiptService {
 
   /// Add a new receipt.
   void addReceipt(Receipt receipt) {
-    _receipts.add(receipt);
+    final index = _receipts.indexWhere((existing) => existing.id == receipt.id);
+    if (index == -1) {
+      _receipts.add(receipt);
+    } else {
+      _receipts[index] = receipt;
+    }
+
+    if (_firebaseEnabled) {
+      unawaited(_upsertReceipt(receipt));
+    }
   }
 
   /// Update a receipt (e.g., after verifying / editing items).
@@ -193,11 +267,20 @@ class ReceiptService {
     if (index != -1) {
       _receipts[index] = updated;
     }
+
+    if (_firebaseEnabled) {
+      unawaited(_upsertReceipt(updated));
+    }
   }
 
   /// Delete a receipt.
   void deleteReceipt(String id) {
+    final initialLength = _receipts.length;
     _receipts.removeWhere((r) => r.id == id);
+    final removed = _receipts.length < initialLength;
+    if (removed && _firebaseEnabled) {
+      unawaited(_deleteReceiptFromCloud(id));
+    }
   }
 
   // ── Matching logic ───────────────────────────────────────────────
@@ -350,5 +433,63 @@ class ReceiptService {
         .split(RegExp(r'\s+'))
         .where((w) => w.length > 2)
         .toList();
+  }
+
+  Future<void> _upsertReceipt(Receipt receipt) async {
+    await _receiptsCollection.doc(receipt.id).set(receipt.toMap());
+  }
+
+  Future<void> _deleteReceiptFromCloud(String id) async {
+    await _receiptsCollection.doc(id).delete();
+  }
+
+  Map<String, dynamic> _normalizeReceiptMap(
+    Map<String, dynamic> map,
+    String docId,
+  ) {
+    final normalized = Map<String, dynamic>.from(map);
+    normalized['id'] = (normalized['id'] as String?) ?? docId;
+    normalized['scanDate'] = _dateToEpochMillis(normalized['scanDate']);
+
+    final rawItems = normalized['items'];
+    if (rawItems is List) {
+      normalized['items'] = rawItems.asMap().entries.map((entry) {
+        final raw = entry.value;
+        if (raw is! Map) {
+          return <String, dynamic>{
+            'id': '${docId}_item_${entry.key}',
+            'name': 'Unknown Item',
+            'quantity': 1,
+            'unitPrice': 0.0,
+            'totalPrice': 0.0,
+            'isUnknown': true,
+          };
+        }
+
+        final itemMap = Map<String, dynamic>.from(raw);
+        itemMap['id'] =
+            (itemMap['id'] as String?) ?? '${docId}_item_${entry.key}';
+        itemMap['unitPrice'] = _toDouble(itemMap['unitPrice']);
+        itemMap['totalPrice'] = _toDouble(itemMap['totalPrice']);
+        return itemMap;
+      }).toList();
+    }
+
+    normalized['subtotal'] = _toDouble(normalized['subtotal']);
+    normalized['tax'] = _toDouble(normalized['tax']);
+    normalized['total'] = _toDouble(normalized['total']);
+    return normalized;
+  }
+
+  int _dateToEpochMillis(dynamic value) {
+    if (value is int) return value;
+    if (value is Timestamp) return value.millisecondsSinceEpoch;
+    if (value is DateTime) return value.millisecondsSinceEpoch;
+    return DateTime.now().millisecondsSinceEpoch;
+  }
+
+  double _toDouble(dynamic value) {
+    if (value is num) return value.toDouble();
+    return 0.0;
   }
 }
