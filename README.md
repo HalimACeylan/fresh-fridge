@@ -67,6 +67,7 @@ Use `FIREBASE_SEED_MODE` at run-time:
 - `if-empty` (default): seed sample data only if cloud is empty
 - `overwrite`: replace active household fridge/receipt data with sample data
 - `skip`: skip seeding and only read existing household data
+- `clear`: remove active household fridge/receipt data (keeps user/household docs)
 
 Examples:
 
@@ -74,7 +75,23 @@ Examples:
 flutter run --dart-define=FIREBASE_SEED_MODE=if-empty
 flutter run --dart-define=FIREBASE_SEED_MODE=overwrite
 flutter run --dart-define=FIREBASE_SEED_MODE=skip
+flutter run --dart-define=FIREBASE_SEED_MODE=clear
 ```
+
+### Remove Old Generated Data
+
+If you still see old demo records, do this:
+
+1. Clear current active household data:
+```bash
+flutter run --dart-define=FIREBASE_SEED_MODE=clear
+```
+2. Start app without reseeding:
+```bash
+flutter run --dart-define=FIREBASE_SEED_MODE=skip
+```
+3. Delete legacy pre-household docs from Firestore Console if needed
+   (for example old `households/default/*` documents).
 
 ### Join Existing Household (Flutter)
 

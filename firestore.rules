@@ -18,74 +18,271 @@ service cloud.firestore {
       return /databases/$(database)/documents/households/$(householdId)/members/$(userId);
     }
 
-    function isHouseholdOwner(householdId) {
-      return isSignedIn() &&
-        get(householdRef(householdId)).data.ownerUserId == request.auth.uid;
+    function householdData(householdId) {
+      return get(householdRef(householdId)).data;
+    }
+
+    function memberData(householdId, userId) {
+      return get(memberRef(householdId, userId)).data;
+    }
+
+    function validRole(role) {
+      return role is string &&
+        (role == 'owner' || role == 'admin' || role == 'member');
+    }
+
+    function validMemberStatus(status) {
+      return status is string &&
+        (status == 'active' || status == 'inactive' || status == 'removed');
     }
 
     function isMember(householdId) {
       return isSignedIn() && exists(memberRef(householdId, request.auth.uid));
     }
 
+    function currentMemberRole(householdId) {
+      return memberData(householdId, request.auth.uid).role;
+    }
+
+    function isHouseholdOwner(householdId) {
+      return isMember(householdId) && currentMemberRole(householdId) == 'owner';
+    }
+
     function isHouseholdAdmin(householdId) {
       return isMember(householdId) &&
-        (get(memberRef(householdId, request.auth.uid)).data.role == 'owner' ||
-          get(memberRef(householdId, request.auth.uid)).data.role == 'admin');
+        (currentMemberRole(householdId) == 'owner' ||
+          currentMemberRole(householdId) == 'admin');
+    }
+
+    function isHouseholdOwnerByDoc(householdId) {
+      return isSignedIn() &&
+        get(householdRef(householdId)).data.ownerUserId == request.auth.uid;
+    }
+
+    function validMemberDocumentShape(memberId, data) {
+      return data.userId == memberId &&
+        validRole(data.role) &&
+        validMemberStatus(data.status) &&
+        data.keys().hasOnly([
+          'userId',
+          'role',
+          'status',
+          'displayName',
+          'email',
+          'photoUrl',
+          'joinedAt',
+          'updatedAt',
+          'inviteCode'
+        ]);
     }
 
     // User profile records
     match /users/{userId} {
-      allow create: if isSelf(userId);
+      allow create: if isSelf(userId) &&
+        request.resource.data.uid == userId &&
+        request.resource.data.primaryHouseholdId is string &&
+        request.resource.data.role is string;
+
       allow read: if isSelf(userId);
-      allow update: if isSelf(userId);
+
+      allow update: if isSelf(userId) &&
+        request.resource.data.uid == userId &&
+        request.resource.data.primaryHouseholdId is string &&
+        request.resource.data.role is string &&
+        request.resource.data.diff(resource.data).changedKeys().hasOnly([
+          'displayName',
+          'photoUrl',
+          'email',
+          'primaryHouseholdId',
+          'role',
+          'status',
+          'planTier',
+          'billingStatus',
+          'authProviderIds',
+          'isAnonymous',
+          'updatedAt',
+          'lastSignInAt',
+          'createdAt'
+        ]);
+
       allow delete: if false;
     }
 
     // Household and household-scoped data
     match /households/{householdId} {
       allow create: if isSignedIn() &&
-        request.resource.data.ownerUserId == request.auth.uid;
+        request.resource.data.id == householdId &&
+        request.resource.data.ownerUserId == request.auth.uid &&
+        request.resource.data.memberCount == 1 &&
+        request.resource.data.status == 'active' &&
+        request.resource.data.keys().hasAll([
+          'id',
+          'name',
+          'ownerUserId',
+          'inviteCode',
+          'memberCount',
+          'status',
+          'updatedAt',
+          'createdAt'
+        ]);
+
       allow read: if isMember(householdId);
-      allow update: if isHouseholdAdmin(householdId);
+
+      allow update: if isHouseholdAdmin(householdId) &&
+        request.resource.data.id == resource.data.id &&
+        request.resource.data.createdAt == resource.data.createdAt &&
+        request.resource.data.status == resource.data.status &&
+        request.resource.data.memberCount is int &&
+        request.resource.data.memberCount >= 0 &&
+        request.resource.data.diff(resource.data).changedKeys().hasOnly([
+          'name',
+          'description',
+          'inviteCode',
+          'ownerUserId',
+          'memberCount',
+          'planTier',
+          'billingStatus',
+          'billingCycle',
+          'seatLimit',
+          'stripeCustomerId',
+          'stripeSubscriptionId',
+          'trialEndsAt',
+          'currentPeriodEnd',
+          'aiReceiptParsingEnabled',
+          'updatedAt'
+        ]) &&
+        (
+          request.resource.data.ownerUserId == resource.data.ownerUserId ||
+          (
+            isHouseholdOwner(householdId) &&
+            request.resource.data.ownerUserId is string &&
+            request.resource.data.ownerUserId != resource.data.ownerUserId
+          )
+        );
+
       allow delete: if false;
 
       // Membership
       match /members/{memberId} {
         allow read: if isMember(householdId);
-        allow create: if isHouseholdAdmin(householdId) ||
-          (isSelf(memberId) &&
-            (isHouseholdOwner(householdId) ||
+
+        allow create: if validMemberDocumentShape(memberId, request.resource.data) &&
+          request.resource.data.keys().hasAll([
+            'userId',
+            'role',
+            'status',
+            'updatedAt'
+          ]) &&
+          (
+            // Owner/Admin can add members directly.
+            isHouseholdAdmin(householdId) ||
+            // Household owner bootstrap document.
+            (
+              isSelf(memberId) &&
+              isHouseholdOwnerByDoc(householdId) &&
+              request.resource.data.role == 'owner'
+            ) ||
+            // Invite-based self-join (member role only).
+            (
+              isSelf(memberId) &&
+              request.resource.data.role == 'member' &&
+              request.resource.data.inviteCode is string &&
               request.resource.data.inviteCode ==
-                get(householdRef(householdId)).data.inviteCode));
-        allow update: if isHouseholdAdmin(householdId) ||
-          (isSelf(memberId) && isMember(householdId));
-        allow delete: if isHouseholdAdmin(householdId);
+                householdData(householdId).inviteCode
+            )
+          );
+
+        allow update: if (
+          // Owner/Admin role management
+          isHouseholdAdmin(householdId) &&
+          validMemberDocumentShape(memberId, request.resource.data) &&
+          request.resource.data.userId == resource.data.userId &&
+          request.resource.data.diff(resource.data).changedKeys().hasOnly([
+            'role',
+            'status',
+            'displayName',
+            'email',
+            'photoUrl',
+            'updatedAt',
+            'inviteCode'
+          ]) &&
+          (
+            currentMemberRole(householdId) == 'owner' ||
+            (
+              currentMemberRole(householdId) == 'admin' &&
+              resource.data.role == 'member' &&
+              request.resource.data.role == 'member'
+            )
+          )
+        ) || (
+          // Self profile updates only
+          isSelf(memberId) &&
+          isMember(householdId) &&
+          request.resource.data.userId == resource.data.userId &&
+          request.resource.data.role == resource.data.role &&
+          request.resource.data.status == resource.data.status &&
+          request.resource.data.inviteCode == resource.data.inviteCode &&
+          request.resource.data.joinedAt == resource.data.joinedAt &&
+          request.resource.data.diff(resource.data).changedKeys().hasOnly([
+            'displayName',
+            'email',
+            'photoUrl',
+            'updatedAt'
+          ])
+        );
+
+        allow delete: if isHouseholdAdmin(householdId) &&
+          memberId != request.auth.uid &&
+          resource.data.role != 'owner' &&
+          (
+            currentMemberRole(householdId) == 'owner' ||
+            (
+              currentMemberRole(householdId) == 'admin' &&
+              resource.data.role == 'member'
+            )
+          );
       }
 
       // Shared fridge items
       match /fridge_items/{itemId} {
-        allow read, create, update, delete: if isMember(householdId);
+        allow read: if isMember(householdId);
+        allow create: if isMember(householdId) &&
+          request.resource.data.householdId == householdId &&
+          request.resource.data.updatedByUserId == request.auth.uid &&
+          request.resource.data.createdByUserId == request.auth.uid;
+        allow update: if isMember(householdId) &&
+          resource.data.householdId == householdId &&
+          request.resource.data.householdId == householdId &&
+          request.resource.data.updatedByUserId == request.auth.uid;
+        allow delete: if isMember(householdId);
       }
 
       // Receipt records
       match /receipts/{receiptId} {
-        allow read, create, update, delete: if isMember(householdId);
+        allow read: if isMember(householdId);
+        allow create: if isMember(householdId) &&
+          request.resource.data.householdId == householdId &&
+          request.resource.data.updatedByUserId == request.auth.uid &&
+          request.resource.data.createdByUserId == request.auth.uid;
+        allow update: if isMember(householdId) &&
+          resource.data.householdId == householdId &&
+          request.resource.data.householdId == householdId &&
+          request.resource.data.updatedByUserId == request.auth.uid;
+        allow delete: if isMember(householdId);
       }
 
       // SaaS subscription state
       match /subscriptions/{subscriptionId} {
         allow read: if isMember(householdId);
-        allow create, update: if isHouseholdAdmin(householdId) ||
-          isHouseholdOwner(householdId);
+        allow create, update: if isHouseholdAdmin(householdId) &&
+          subscriptionId == 'current';
         allow delete: if false;
       }
 
       // Billing profile + payment records
       match /payments/{paymentId} {
-        allow read: if isHouseholdAdmin(householdId) ||
-          isHouseholdOwner(householdId);
-        allow create, update: if (isHouseholdAdmin(householdId) ||
-          isHouseholdOwner(householdId)) &&
+        allow read: if isHouseholdAdmin(householdId);
+        allow create, update: if isHouseholdAdmin(householdId) &&
           paymentId == 'payment_profile';
         allow delete: if false;
       }

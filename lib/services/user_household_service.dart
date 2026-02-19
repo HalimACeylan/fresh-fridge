@@ -17,6 +17,15 @@ class UserHouseholdService {
 
   static const String _fallbackUserId = 'local_debug_user';
   static const String _fallbackHouseholdId = 'local_debug_household';
+  static const String _roleOwner = 'owner';
+  static const String _roleAdmin = 'admin';
+  static const String _roleMember = 'member';
+  static const String _roleNone = 'none';
+  static const Set<String> _assignableRoles = {
+    _roleOwner,
+    _roleAdmin,
+    _roleMember,
+  };
 
   FirebaseAuth? _auth;
   FirebaseFirestore? _firestore;
@@ -24,13 +33,17 @@ class UserHouseholdService {
   bool _firebaseEnabled = false;
   String _userId = _fallbackUserId;
   String _householdId = _fallbackHouseholdId;
-  String _memberRole = 'owner';
+  String _memberRole = _roleOwner;
 
   bool get isFirebaseEnabled => _firebaseEnabled;
   String get userId => _userId;
   String get householdId => _householdId;
   String get memberRole => _memberRole;
   bool get isAuthenticated => _firebaseEnabled && _userId != _fallbackUserId;
+  bool get isOwner => _memberRole == _roleOwner;
+  bool get isAdmin => _memberRole == _roleAdmin;
+  bool get canManageMembers => isOwner || isAdmin;
+  bool get canManageHousehold => canManageMembers;
 
   Future<void> initialize() async {
     if (_isInitialized) return;
@@ -51,6 +64,21 @@ class UserHouseholdService {
       _firebaseEnabled = true;
     } catch (_) {
       _firebaseEnabled = false;
+    }
+  }
+
+  Future<void> refreshCurrentMemberRoleFromCloud() async {
+    if (!_firebaseEnabled) return;
+
+    final memberSnapshot = await _firestore!
+        .collection('households')
+        .doc(_householdId)
+        .collection('members')
+        .doc(_userId)
+        .get();
+    final role = memberSnapshot.data()?['role'] as String?;
+    if (role != null) {
+      _memberRole = _normalizeRole(role);
     }
   }
 
@@ -88,7 +116,6 @@ class UserHouseholdService {
   Future<void> _ensureUserAndHouseholdDocuments(User user) async {
     final firestore = _firestore!;
     final users = firestore.collection('users');
-    final households = firestore.collection('households');
 
     final userRef = users.doc(user.uid);
     final userSnapshot = await userRef.get();
@@ -96,30 +123,48 @@ class UserHouseholdService {
     final existingHouseholdId = userData?['primaryHouseholdId'] as String?;
 
     if (existingHouseholdId != null && existingHouseholdId.isNotEmpty) {
-      final householdRef = households.doc(existingHouseholdId);
+      final householdRef = firestore
+          .collection('households')
+          .doc(existingHouseholdId);
       final householdSnapshot = await householdRef.get();
       if (householdSnapshot.exists) {
-        final role = await _ensureMembershipAndGetRole(
-          householdId: existingHouseholdId,
-          user: user,
-          defaultRole: 'member',
-        );
-        _householdId = existingHouseholdId;
-        _memberRole = role;
-        await userRef.set(
-          _buildUserProfileData(
-            user: user,
-            primaryHouseholdId: existingHouseholdId,
-            role: role,
-            includeCreatedAt: false,
-          ),
-          SetOptions(merge: true),
-        );
-        return;
+        final memberSnapshot = await householdRef
+            .collection('members')
+            .doc(user.uid)
+            .get();
+        if (memberSnapshot.exists) {
+          final existingRole = memberSnapshot.data()?['role'] as String?;
+          final role = _normalizeRole(existingRole);
+          _householdId = existingHouseholdId;
+          _memberRole = role;
+          await userRef.set(
+            _buildUserProfileData(
+              user: user,
+              primaryHouseholdId: existingHouseholdId,
+              role: role,
+              includeCreatedAt: false,
+            ),
+            SetOptions(merge: true),
+          );
+          return;
+        }
       }
     }
 
-    final householdRef = households.doc();
+    await _provisionPersonalHousehold(
+      user: user,
+      userRef: userRef,
+      includeUserCreatedAt: !userSnapshot.exists,
+    );
+  }
+
+  Future<void> _provisionPersonalHousehold({
+    required User user,
+    required DocumentReference<Map<String, dynamic>> userRef,
+    required bool includeUserCreatedAt,
+  }) async {
+    final firestore = _firestore!;
+    final householdRef = firestore.collection('households').doc();
     final householdId = householdRef.id;
     final inviteCode = _generateInviteCode(seed: householdId);
     await householdRef.set(
@@ -133,7 +178,7 @@ class UserHouseholdService {
     await householdRef
         .collection('members')
         .doc(user.uid)
-        .set(_buildHouseholdMemberData(user: user, role: 'owner'));
+        .set(_buildHouseholdMemberData(user: user, role: _roleOwner));
     await householdRef
         .collection('subscriptions')
         .doc('current')
@@ -146,42 +191,20 @@ class UserHouseholdService {
       _buildUserProfileData(
         user: user,
         primaryHouseholdId: householdId,
-        role: 'owner',
-        includeCreatedAt: true,
+        role: _roleOwner,
+        includeCreatedAt: includeUserCreatedAt,
       ),
       SetOptions(merge: true),
     );
 
     _householdId = householdId;
-    _memberRole = 'owner';
-  }
-
-  Future<String> _ensureMembershipAndGetRole({
-    required String householdId,
-    required User user,
-    required String defaultRole,
-  }) async {
-    final memberRef = _firestore!
-        .collection('households')
-        .doc(householdId)
-        .collection('members')
-        .doc(user.uid);
-    final memberSnapshot = await memberRef.get();
-    if (memberSnapshot.exists) {
-      final role = memberSnapshot.data()?['role'] as String?;
-      return role ?? defaultRole;
-    }
-
-    await memberRef.set(
-      _buildHouseholdMemberData(user: user, role: defaultRole),
-    );
-    return defaultRole;
+    _memberRole = _roleOwner;
   }
 
   Future<void> joinHousehold(
     String householdId, {
     required String inviteCode,
-    String role = 'member',
+    String role = _roleMember,
   }) async {
     if (!_firebaseEnabled) return;
 
@@ -199,24 +222,29 @@ class UserHouseholdService {
 
     final memberRef = householdRef.collection('members').doc(_userId);
     final memberSnapshot = await memberRef.get();
-    final isNewMembership = !memberSnapshot.exists;
-    final roleToWrite = memberSnapshot.data()?['role'] as String? ?? role;
+    final existingRole = memberSnapshot.data()?['role'] as String?;
+    final roleToWrite = existingRole == null
+        ? _roleMember
+        : _normalizeRole(existingRole);
     final memberData = _buildHouseholdMemberData(
       user: _auth!.currentUser!,
       role: roleToWrite,
     )..['inviteCode'] = inviteCode;
 
     final batch = firestore.batch();
+    final sanitizedJoinRole = role.trim().toLowerCase();
+    if (sanitizedJoinRole != _roleMember) {
+      debugPrint(
+        'Ignoring requested role "$role" during join. '
+        'New members are always assigned "$_roleMember".',
+      );
+    }
     batch.set(memberRef, memberData, SetOptions(merge: true));
     batch.set(firestore.collection('users').doc(_userId), {
       'primaryHouseholdId': householdId,
       'role': roleToWrite,
       'updatedAt': FieldValue.serverTimestamp(),
       'lastSignInAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
-    batch.set(householdRef, {
-      'updatedAt': FieldValue.serverTimestamp(),
-      if (isNewMembership) 'memberCount': FieldValue.increment(1),
     }, SetOptions(merge: true));
     await batch.commit();
 
@@ -226,7 +254,7 @@ class UserHouseholdService {
 
   Future<String?> rotateHouseholdInviteCode() async {
     if (!_firebaseEnabled) return null;
-    if (!(_memberRole == 'owner' || _memberRole == 'admin')) return null;
+    await _requireHouseholdAdminRole();
 
     final code = _generateInviteCode(seed: _householdId);
     await _firestore!.collection('households').doc(_householdId).set({
@@ -263,15 +291,31 @@ class UserHouseholdService {
         .collection('members');
 
     if (role != null && role.trim().isNotEmpty) {
-      query = query.where('role', isEqualTo: role.trim());
+      query = query.where('role', isEqualTo: _normalizeRole(role));
     }
 
     final snapshot = await query.limit(limit).get();
-    return snapshot.docs.map((doc) {
+    final members = snapshot.docs.map((doc) {
       final data = Map<String, dynamic>.from(doc.data());
       data['id'] = doc.id;
+      data['role'] = _normalizeRole(data['role'] as String?);
       return data;
     }).toList();
+
+    members.sort((a, b) {
+      final roleA = _normalizeRole(a['role'] as String?);
+      final roleB = _normalizeRole(b['role'] as String?);
+      final rankA = _roleSortOrder(roleA);
+      final rankB = _roleSortOrder(roleB);
+      if (rankA != rankB) return rankA.compareTo(rankB);
+
+      final nameA = ((a['displayName'] as String?) ?? '').toLowerCase();
+      final nameB = ((b['displayName'] as String?) ?? '').toLowerCase();
+      if (nameA != nameB) return nameA.compareTo(nameB);
+      return (a['id'] as String).compareTo(b['id'] as String);
+    });
+
+    return members;
   }
 
   Future<void> updateCurrentUserProfile({
@@ -291,15 +335,23 @@ class UserHouseholdService {
 
   Future<void> updateCurrentHousehold({
     String? name,
+    String? description,
     String? planTier,
     String? billingStatus,
     bool? aiReceiptParsingEnabled,
   }) async {
     if (!_firebaseEnabled) return;
+    await _requireHouseholdAdminRole();
+
     final data = <String, dynamic>{'updatedAt': FieldValue.serverTimestamp()};
-    if (name != null) data['name'] = name;
-    if (planTier != null) data['planTier'] = planTier;
-    if (billingStatus != null) data['billingStatus'] = billingStatus;
+    if (name != null) data['name'] = _sanitizeHouseholdName(name);
+    if (description != null) {
+      data['description'] = _sanitizeOptionalDescription(description);
+    }
+    if (planTier != null) data['planTier'] = _sanitizePlanTier(planTier);
+    if (billingStatus != null) {
+      data['billingStatus'] = _sanitizeBillingStatus(billingStatus);
+    }
     if (aiReceiptParsingEnabled != null) {
       data['aiReceiptParsingEnabled'] = aiReceiptParsingEnabled;
     }
@@ -323,6 +375,7 @@ class UserHouseholdService {
     DateTime? currentPeriodEnd,
   }) async {
     if (!_firebaseEnabled) return;
+    await _requireHouseholdAdminRole();
 
     final householdRef = _firestore!.collection('households').doc(_householdId);
     await householdRef.collection('subscriptions').doc('current').set({
@@ -367,6 +420,8 @@ class UserHouseholdService {
     String? taxId,
   }) async {
     if (!_firebaseEnabled) return;
+    await _requireHouseholdAdminRole();
+
     final data = <String, dynamic>{'updatedAt': FieldValue.serverTimestamp()};
     if (customerId != null) data['customerId'] = customerId;
     if (defaultPaymentMethodId != null) {
@@ -383,6 +438,164 @@ class UserHouseholdService {
         .collection('payments')
         .doc('payment_profile')
         .set(data, SetOptions(merge: true));
+  }
+
+  Future<Map<String, dynamic>?> readHouseholdMemberFromCloud(
+    String memberUserId,
+  ) async {
+    if (!_firebaseEnabled) return null;
+    final id = memberUserId.trim();
+    if (id.isEmpty) return null;
+
+    final snapshot = await _firestore!
+        .collection('households')
+        .doc(_householdId)
+        .collection('members')
+        .doc(id)
+        .get();
+    if (!snapshot.exists || snapshot.data() == null) return null;
+
+    final data = Map<String, dynamic>.from(snapshot.data()!);
+    data['id'] = snapshot.id;
+    data['role'] = _normalizeRole(data['role'] as String?);
+    return data;
+  }
+
+  Future<void> updateHouseholdMemberRole({
+    required String memberUserId,
+    required String role,
+  }) async {
+    if (!_firebaseEnabled) {
+      throw StateError('Firebase is not enabled for this project.');
+    }
+
+    final targetMemberId = memberUserId.trim();
+    if (targetMemberId.isEmpty) {
+      throw StateError('Member id is required.');
+    }
+    if (targetMemberId == _userId) {
+      throw StateError('You cannot change your own role.');
+    }
+
+    final normalizedRole = _normalizeRole(role);
+    if (!_assignableRoles.contains(normalizedRole)) {
+      throw StateError('Unsupported role: $role');
+    }
+
+    final firestore = _firestore!;
+    final householdRef = firestore.collection('households').doc(_householdId);
+    final membersRef = householdRef.collection('members');
+    final actorRef = membersRef.doc(_userId);
+    final targetRef = membersRef.doc(targetMemberId);
+
+    await firestore.runTransaction((transaction) async {
+      final actorSnapshot = await transaction.get(actorRef);
+      if (!actorSnapshot.exists) {
+        throw StateError('You are not a member of this household.');
+      }
+
+      final actorRole = _normalizeRole(
+        actorSnapshot.data()?['role'] as String?,
+      );
+      if (actorRole != _roleOwner && actorRole != _roleAdmin) {
+        throw StateError('You do not have permission to edit member roles.');
+      }
+
+      final targetSnapshot = await transaction.get(targetRef);
+      if (!targetSnapshot.exists) {
+        throw StateError('Member not found.');
+      }
+
+      final targetRole = _normalizeRole(
+        targetSnapshot.data()?['role'] as String?,
+      );
+
+      if (actorRole == _roleAdmin) {
+        if (targetRole != _roleMember || normalizedRole != _roleMember) {
+          throw StateError('Admins can only manage member-level users.');
+        }
+      }
+
+      if (normalizedRole == _roleOwner) {
+        if (actorRole != _roleOwner) {
+          throw StateError('Only the current owner can transfer ownership.');
+        }
+        transaction.update(householdRef, {
+          'ownerUserId': targetMemberId,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+        transaction.update(actorRef, {
+          'role': _roleAdmin,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+        _memberRole = _roleAdmin;
+      } else if (targetRole == _roleOwner) {
+        throw StateError('Transfer ownership instead of demoting the owner.');
+      }
+
+      transaction.update(targetRef, {
+        'role': normalizedRole,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    });
+  }
+
+  Future<void> removeHouseholdMember(String memberUserId) async {
+    if (!_firebaseEnabled) {
+      throw StateError('Firebase is not enabled for this project.');
+    }
+
+    final targetMemberId = memberUserId.trim();
+    if (targetMemberId.isEmpty) {
+      throw StateError('Member id is required.');
+    }
+    if (targetMemberId == _userId) {
+      throw StateError('You cannot remove yourself from this screen.');
+    }
+
+    final firestore = _firestore!;
+    final householdRef = firestore.collection('households').doc(_householdId);
+    final membersRef = householdRef.collection('members');
+    final actorRef = membersRef.doc(_userId);
+    final targetRef = membersRef.doc(targetMemberId);
+
+    await firestore.runTransaction((transaction) async {
+      final actorSnapshot = await transaction.get(actorRef);
+      if (!actorSnapshot.exists) {
+        throw StateError('You are not a member of this household.');
+      }
+      final actorRole = _normalizeRole(
+        actorSnapshot.data()?['role'] as String?,
+      );
+      if (actorRole != _roleOwner && actorRole != _roleAdmin) {
+        throw StateError('You do not have permission to remove members.');
+      }
+
+      final targetSnapshot = await transaction.get(targetRef);
+      if (!targetSnapshot.exists) {
+        throw StateError('Member not found.');
+      }
+      final targetRole = _normalizeRole(
+        targetSnapshot.data()?['role'] as String?,
+      );
+      if (targetRole == _roleOwner) {
+        throw StateError('The owner cannot be removed.');
+      }
+      if (actorRole == _roleAdmin && targetRole == _roleAdmin) {
+        throw StateError('Admins cannot remove another admin.');
+      }
+
+      final householdSnapshot = await transaction.get(householdRef);
+      final currentCount =
+          (householdSnapshot.data()?['memberCount'] as num?)?.toInt() ?? 1;
+      final nextCount = currentCount <= 0 ? 0 : currentCount - 1;
+
+      transaction.delete(targetRef);
+      transaction.update(householdRef, {
+        'memberCount': nextCount,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    });
   }
 
   Map<String, dynamic> buildAuditFields({required bool includeCreatedAt}) {
@@ -411,6 +624,78 @@ class UserHouseholdService {
         .toUpperCase();
     final right = millis.padLeft(4, '0').substring(millis.length - 4);
     return '$left-$right';
+  }
+
+  Future<void> _requireHouseholdAdminRole() async {
+    if (!_firebaseEnabled) {
+      throw StateError('Firebase is not enabled for this project.');
+    }
+
+    final memberSnapshot = await _firestore!
+        .collection('households')
+        .doc(_householdId)
+        .collection('members')
+        .doc(_userId)
+        .get();
+    if (!memberSnapshot.exists || memberSnapshot.data() == null) {
+      throw StateError('You are not a member of this household.');
+    }
+
+    final role = _normalizeRole(memberSnapshot.data()!['role'] as String?);
+    if (role != _roleOwner && role != _roleAdmin) {
+      throw StateError('Only owner/admin can modify household settings.');
+    }
+    _memberRole = role;
+  }
+
+  String _normalizeRole(String? role) {
+    final normalized = role?.trim().toLowerCase();
+    if (normalized == _roleOwner) return _roleOwner;
+    if (normalized == _roleAdmin) return _roleAdmin;
+    if (normalized == _roleMember) return _roleMember;
+    if (normalized == _roleNone) return _roleNone;
+    return _roleMember;
+  }
+
+  int _roleSortOrder(String role) {
+    switch (role) {
+      case _roleOwner:
+        return 0;
+      case _roleAdmin:
+        return 1;
+      case _roleMember:
+        return 2;
+      default:
+        return 3;
+    }
+  }
+
+  String _sanitizeHouseholdName(String value) {
+    final trimmed = value.trim().replaceAll(RegExp(r'\s+'), ' ');
+    if (trimmed.isEmpty) return 'My Household';
+    if (trimmed.length > 80) return trimmed.substring(0, 80);
+    return trimmed;
+  }
+
+  String _sanitizeOptionalDescription(String value) {
+    final trimmed = value.trim().replaceAll(RegExp(r'\s+'), ' ');
+    if (trimmed.isEmpty) return '';
+    if (trimmed.length > 240) return trimmed.substring(0, 240);
+    return trimmed;
+  }
+
+  String _sanitizePlanTier(String value) {
+    final normalized = value.trim().toLowerCase();
+    if (normalized.isEmpty) return 'free';
+    if (normalized.length > 32) return normalized.substring(0, 32);
+    return normalized;
+  }
+
+  String _sanitizeBillingStatus(String value) {
+    final normalized = value.trim().toLowerCase();
+    if (normalized.isEmpty) return 'none';
+    if (normalized.length > 32) return normalized.substring(0, 32);
+    return normalized;
   }
 
   Map<String, dynamic> _buildUserProfileData({
@@ -448,6 +733,7 @@ class UserHouseholdService {
       'name': householdName,
       'ownerUserId': ownerUserId,
       'inviteCode': inviteCode,
+      'description': '',
       'memberCount': 1,
       'status': 'active',
       'planTier': 'free',
