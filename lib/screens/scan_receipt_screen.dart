@@ -477,8 +477,6 @@ class _ScanReceiptScreenState extends State<ScanReceiptScreen>
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      _buildModeText('Barcode', false),
-                      const SizedBox(width: 24),
                       Container(
                         padding: const EdgeInsets.only(bottom: 2),
                         decoration: const BoxDecoration(
@@ -497,8 +495,6 @@ class _ScanReceiptScreenState extends State<ScanReceiptScreen>
                           ),
                         ),
                       ),
-                      const SizedBox(width: 24),
-                      _buildModeText('Manual', false),
                     ],
                   ),
                   const SizedBox(height: 24),
@@ -703,18 +699,6 @@ class _ScanReceiptScreenState extends State<ScanReceiptScreen>
         onPressed: onPressed,
         padding: EdgeInsets.zero,
         constraints: const BoxConstraints(),
-      ),
-    );
-  }
-
-  Widget _buildModeText(String text, bool isActive) {
-    return Text(
-      text,
-      style: TextStyle(
-        color: isActive ? Colors.black : Colors.grey,
-        fontWeight: FontWeight.bold,
-        fontSize: 12,
-        letterSpacing: 0.5,
       ),
     );
   }
