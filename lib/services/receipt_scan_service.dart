@@ -459,6 +459,16 @@ class ReceiptScanService {
     required ReceiptService receiptService,
   }) {
     final cleanName = _cleanItemName(name);
+    final lowerClean = cleanName.toLowerCase();
+
+    // Check if the item is frozen
+    final isFrozen = lowerClean.contains('frozen');
+
+    // Remove 'frozen' to get a better base category match if it exists
+    final searchName = isFrozen
+        ? lowerClean.replaceAll(RegExp(r'\bfrozen\b'), '').trim()
+        : cleanName;
+
     return ReceiptItem(
       id: 'ri_${DateTime.now().microsecondsSinceEpoch}_$index',
       name: cleanName,
@@ -466,8 +476,13 @@ class ReceiptScanService {
       unitPrice: unitPrice,
       totalPrice: unitPrice * quantity,
       isVerified: false,
-      matchedFridgeItemId: receiptService.findFridgeMatch(cleanName),
-      suggestedCategory: receiptService.suggestCategory(cleanName),
+      isFrozen: isFrozen,
+      matchedFridgeItemId: receiptService.findFridgeMatch(
+        searchName.isEmpty ? cleanName : searchName,
+      ),
+      suggestedCategory: receiptService.suggestCategory(
+        searchName.isEmpty ? cleanName : searchName,
+      ),
     );
   }
 

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:fridge_app/models/fridge_item.dart';
 import 'package:fridge_app/models/receipt.dart';
 import 'package:fridge_app/routes.dart';
 import 'package:fridge_app/services/fridge_service.dart';
@@ -356,33 +355,10 @@ class _RecentScanResultsScreenState extends State<RecentScanResultsScreen> {
     );
   }
 
-  Color _categoryBadgeColor(FridgeCategory? category) {
-    switch (category) {
-      case FridgeCategory.produce:
-        return const Color(0xFF43A047);
-      case FridgeCategory.dairy:
-        return const Color(0xFF42A5F5);
-      case FridgeCategory.meat:
-        return const Color(0xFFE57373);
-      case FridgeCategory.beverages:
-        return const Color(0xFF26C6DA);
-      case FridgeCategory.condiments:
-        return const Color(0xFFFFA726);
-      case FridgeCategory.grains:
-        return const Color(0xFFD4A373);
-      case FridgeCategory.frozen:
-        return const Color(0xFF90CAF9);
-      case FridgeCategory.snacks:
-        return const Color(0xFFBA68C8);
-      case FridgeCategory.other:
-      case null:
-        return const Color(0xFF9E9E9E);
-    }
-  }
-
   Widget _buildItemRow(ReceiptItem item, {bool hasControls = false}) {
     final categoryEmoji = item.suggestedCategory?.emoji ?? '📦';
-    final categoryColor = _categoryBadgeColor(item.suggestedCategory);
+    final categoryColor =
+        item.suggestedCategory?.color ?? const Color(0xFF9E9E9E);
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
