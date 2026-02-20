@@ -68,13 +68,13 @@ class _ScanReceiptScreenState extends State<ScanReceiptScreen>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (_cameraController == null || !_cameraController!.value.isInitialized) {
-      return;
-    }
     if (state == AppLifecycleState.inactive) {
+      _isCameraInitialized = false;
       _cameraController?.dispose();
     } else if (state == AppLifecycleState.resumed) {
-      _initializeCamera();
+      if (_cameraController != null) {
+        _initializeCamera();
+      }
     }
   }
 
@@ -107,6 +107,7 @@ class _ScanReceiptScreenState extends State<ScanReceiptScreen>
     if (_isProcessing ||
         !_isCameraInitialized ||
         _cameraController == null ||
+        !_cameraController!.value.isInitialized ||
         _cameraController!.value.isTakingPicture) {
       return;
     }
