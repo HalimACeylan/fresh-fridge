@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:fridge_app/routes.dart';
 import 'package:fridge_app/services/receipt_scan_service.dart';
@@ -14,25 +15,67 @@ class ScanReceiptScreen extends StatefulWidget {
 }
 
 class _ScanReceiptScreenState extends State<ScanReceiptScreen>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late AnimationController _controller;
   final ImagePicker _imagePicker = ImagePicker();
   bool _isProcessing = false;
 
+  CameraController? _cameraController;
+  List<CameraDescription>? _cameras;
+  bool _isCameraInitialized = false;
+  FlashMode _flashMode = FlashMode.auto;
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 2),
     )..repeat(reverse: true);
+    _initializeCamera();
+  }
+
+  Future<void> _initializeCamera() async {
+    try {
+      _cameras = await availableCameras();
+      if (_cameras!.isNotEmpty) {
+        _cameraController = CameraController(
+          _cameras!.first,
+          ResolutionPreset.high,
+          enableAudio: false,
+        );
+        await _cameraController!.initialize();
+        if (mounted) {
+          setState(() {
+            _isCameraInitialized = true;
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Error initializing camera: $e');
+    }
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _cameraController?.dispose();
     _controller.dispose();
     ReceiptScanService.instance.close();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (_cameraController == null || !_cameraController!.value.isInitialized) {
+      return;
+    }
+    if (state == AppLifecycleState.inactive) {
+      _cameraController?.dispose();
+    } else if (state == AppLifecycleState.resumed) {
+      _initializeCamera();
+    }
   }
 
   Future<void> _pickImageAndPreview(ImageSource source) async {
@@ -58,6 +101,67 @@ class _ScanReceiptScreenState extends State<ScanReceiptScreen>
     } catch (e) {
       _showFailureSnackBar('Could not open image picker: $e');
     }
+  }
+
+  Future<void> _takePictureAndPreview() async {
+    if (_isProcessing ||
+        !_isCameraInitialized ||
+        _cameraController == null ||
+        _cameraController!.value.isTakingPicture) {
+      return;
+    }
+
+    setState(() {
+      _isProcessing = true;
+    });
+
+    try {
+      final xFile = await _cameraController!.takePicture();
+      if (!mounted) {
+        setState(() {
+          _isProcessing = false;
+        });
+        return;
+      }
+
+      final shouldProcess = await _showReceiptPreview(
+        imagePath: xFile.path,
+        source: ImageSource.camera,
+      );
+
+      if (shouldProcess == true) {
+        await _processSelectedReceiptImage(xFile.path);
+      } else {
+        if (mounted) {
+          setState(() {
+            _isProcessing = false;
+          });
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        _showFailureSnackBar('Failed to take picture: $e');
+        setState(() {
+          _isProcessing = false;
+        });
+      }
+    }
+  }
+
+  void _toggleFlash() {
+    if (_cameraController == null) return;
+
+    setState(() {
+      if (_flashMode == FlashMode.off) {
+        _flashMode = FlashMode.always;
+      } else if (_flashMode == FlashMode.always) {
+        _flashMode = FlashMode.auto;
+      } else {
+        _flashMode = FlashMode.off;
+      }
+    });
+
+    _cameraController!.setFlashMode(_flashMode);
   }
 
   Future<void> _processSelectedReceiptImage(String imagePath) async {
@@ -206,10 +310,9 @@ class _ScanReceiptScreenState extends State<ScanReceiptScreen>
         children: [
           // Camera Feed Background
           Positioned.fill(
-            child: Image.asset(
-              'assets/images/camera_feed.png',
-              fit: BoxFit.cover,
-            ),
+            child: _isCameraInitialized && _cameraController != null
+                ? CameraPreview(_cameraController!)
+                : Container(color: Colors.black),
           ),
           // Dark Overlay
           Positioned.fill(
@@ -247,7 +350,14 @@ class _ScanReceiptScreenState extends State<ScanReceiptScreen>
                         ),
                       ),
                     ),
-                    _buildIconButton(Icons.flash_off, () {}),
+                    _buildIconButton(
+                      _flashMode == FlashMode.off
+                          ? Icons.flash_off
+                          : _flashMode == FlashMode.always
+                          ? Icons.flash_on
+                          : Icons.flash_auto,
+                      _toggleFlash,
+                    ),
                   ],
                 ),
               ),
@@ -424,9 +534,7 @@ class _ScanReceiptScreenState extends State<ScanReceiptScreen>
                       ),
                       // Shutter
                       GestureDetector(
-                        onTap: _isProcessing
-                            ? null
-                            : () => _pickImageAndPreview(ImageSource.camera),
+                        onTap: _isProcessing ? null : _takePictureAndPreview,
                         child: Container(
                           width: 80,
                           height: 80,

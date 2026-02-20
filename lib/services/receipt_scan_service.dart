@@ -162,15 +162,127 @@ class ReceiptScanService {
 
   Future<String> _extractTextFromImages(List<String> imagePaths) async {
     final buffer = StringBuffer();
+    final moneyRegex = RegExp(r'\d+[.,]\d{2}');
 
     for (final path in imagePaths) {
       final inputImage = InputImage.fromFilePath(path);
       final recognized = await _recognizer.processImage(inputImage);
-      final text = recognized.text.trim();
 
-      if (text.isEmpty) continue;
-      if (buffer.isNotEmpty) buffer.writeln('\n');
-      buffer.writeln(text);
+      final elements = <TextElement>[];
+      for (final block in recognized.blocks) {
+        for (final line in block.lines) {
+          elements.addAll(line.elements);
+        }
+      }
+
+      if (elements.isEmpty) continue;
+
+      elements.sort((a, b) {
+        final yA = a.boundingBox.top + (a.boundingBox.height / 2);
+        final yB = b.boundingBox.top + (b.boundingBox.height / 2);
+        return yA.compareTo(yB);
+      });
+
+      final physicalLines = <List<TextElement>>[];
+      List<TextElement> currentLine = [];
+      double? currentY;
+
+      for (final element in elements) {
+        final y = element.boundingBox.top + (element.boundingBox.height / 2);
+        if (currentY == null) {
+          currentY = y;
+          currentLine.add(element);
+        } else {
+          final tolerance = element.boundingBox.height * 0.6;
+          if ((y - currentY).abs() <= tolerance) {
+            currentLine.add(element);
+            currentY =
+                (currentY * (currentLine.length - 1) + y) / currentLine.length;
+          } else {
+            currentLine.sort(
+              (a, b) => a.boundingBox.left.compareTo(b.boundingBox.left),
+            );
+            physicalLines.add(currentLine);
+            currentLine = [element];
+            currentY = y;
+          }
+        }
+      }
+      if (currentLine.isNotEmpty) {
+        currentLine.sort(
+          (a, b) => a.boundingBox.left.compareTo(b.boundingBox.left),
+        );
+        physicalLines.add(currentLine);
+      }
+
+      final priceXPositions = <double>[];
+      for (final line in physicalLines) {
+        if (line.isEmpty) continue;
+        final lastElem = line.last;
+        if (moneyRegex.hasMatch(lastElem.text) ||
+            _moneyTokenPattern.hasMatch(lastElem.text)) {
+          priceXPositions.add(lastElem.boundingBox.right);
+        }
+      }
+
+      double? targetRightX;
+      if (priceXPositions.isNotEmpty) {
+        final clusters = <double, int>{};
+        const tolerance = 100.0;
+
+        for (final x in priceXPositions) {
+          double? matchX;
+          for (final k in clusters.keys) {
+            if ((k - x).abs() <= tolerance) {
+              matchX = k;
+              break;
+            }
+          }
+          if (matchX != null) {
+            clusters[matchX] = clusters[matchX]! + 1;
+          } else {
+            clusters[x] = 1;
+          }
+        }
+
+        var maxCount = 0;
+        for (final entry in clusters.entries) {
+          if (entry.value > maxCount) {
+            maxCount = entry.value;
+            targetRightX = entry.key;
+          } else if (entry.value == maxCount &&
+              targetRightX != null &&
+              entry.key > targetRightX) {
+            targetRightX = entry.key;
+          }
+        }
+      }
+
+      for (final line in physicalLines) {
+        if (line.isEmpty) continue;
+
+        final lastElem = line.last;
+        final lineText = line.map((e) => e.text).join(' ');
+
+        final lowerText = lineText.toLowerCase();
+        final isTotalLine =
+            lowerText.contains('total') ||
+            lowerText.contains('tax') ||
+            lowerText.contains('subtotal');
+
+        if (!isTotalLine && targetRightX != null) {
+          if (RegExp(r'\d').hasMatch(lastElem.text)) {
+            final x = lastElem.boundingBox.right;
+            if ((x - targetRightX).abs() > 150.0) {
+              // Highly effective: drop unaligned headers/footers with numbers!
+              continue;
+            }
+          }
+        }
+
+        if (buffer.isNotEmpty) buffer.writeln('\n');
+        buffer.write(lineText);
+      }
     }
 
     return buffer.toString();
