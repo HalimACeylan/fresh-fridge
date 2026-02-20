@@ -1,10 +1,72 @@
 import 'package:flutter/material.dart';
+import 'package:fridge_app/models/fridge_item.dart';
 import 'package:fridge_app/models/receipt.dart';
 import 'package:fridge_app/routes.dart';
+import 'package:fridge_app/services/fridge_service.dart';
 import 'package:fridge_app/services/receipt_service.dart';
 
-class RecentScanResultsScreen extends StatelessWidget {
+class RecentScanResultsScreen extends StatefulWidget {
   const RecentScanResultsScreen({super.key});
+
+  @override
+  State<RecentScanResultsScreen> createState() =>
+      _RecentScanResultsScreenState();
+}
+
+class _RecentScanResultsScreenState extends State<RecentScanResultsScreen> {
+  bool _isImporting = false;
+
+  Future<void> _importItemsToFridge(Receipt receipt) async {
+    if (_isImporting) return;
+
+    setState(() {
+      _isImporting = true;
+    });
+
+    try {
+      final imported = ReceiptService.instance.addReceiptItemsToFridge(
+        receipt.id,
+      );
+      await FridgeService.instance.refreshFromCloud();
+      await ReceiptService.instance.refreshFromCloud();
+
+      if (!mounted) return;
+
+      if (imported.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No new recognized items were available to import.'),
+          ),
+        );
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Added ${imported.length} item${imported.length == 1 ? '' : 's'} to your fridge.',
+          ),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+
+      await Navigator.pushNamed(context, AppRoutes.insideFridge);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Could not import scanned items: $e'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isImporting = false;
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -56,7 +118,7 @@ class RecentScanResultsScreen extends StatelessWidget {
           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
         ),
         centerTitle: true,
-        backgroundColor: const Color(0xFFAFB2AF).withOpacity(0.1),
+        backgroundColor: const Color(0xFFAFB2AF).withValues(alpha: 0.1),
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.black87),
@@ -95,7 +157,7 @@ class RecentScanResultsScreen extends StatelessWidget {
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
+                      color: Colors.black.withValues(alpha: 0.05),
                       blurRadius: 10,
                       offset: const Offset(0, 4),
                     ),
@@ -111,7 +173,9 @@ class RecentScanResultsScreen extends StatelessWidget {
                           Container(
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF13EC13).withOpacity(0.2),
+                              color: const Color(
+                                0xFF13EC13,
+                              ).withValues(alpha: 0.2),
                               shape: BoxShape.circle,
                             ),
                             child: const Icon(
@@ -149,12 +213,7 @@ class RecentScanResultsScreen extends StatelessWidget {
                     ...recognizedItems.asMap().entries.expand((entry) {
                       final item = entry.value;
                       return [
-                        _buildItemRow(
-                          item.name,
-                          '${item.quantity}',
-                          '\$${item.totalPrice.toStringAsFixed(2)}',
-                          hasControls: item.quantity > 1,
-                        ),
+                        _buildItemRow(item, hasControls: item.quantity > 1),
                         if (entry.key < recognizedItems.length - 1 ||
                             unknownItems.isNotEmpty)
                           const Divider(
@@ -248,14 +307,14 @@ class RecentScanResultsScreen extends StatelessWidget {
                 gradient: LinearGradient(
                   begin: Alignment.bottomCenter,
                   end: Alignment.topCenter,
-                  colors: [Colors.white, Colors.white.withOpacity(0)],
+                  colors: [Colors.white, Colors.white.withValues(alpha: 0)],
                   stops: const [0.8, 1.0],
                 ),
               ),
               child: ElevatedButton(
-                onPressed: () {
-                  Navigator.pushNamed(context, AppRoutes.createFamilyGroup);
-                },
+                onPressed: _isImporting
+                    ? null
+                    : () => _importItemsToFridge(receipt),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF13EC13),
                   foregroundColor: Colors.black,
@@ -264,15 +323,24 @@ class RecentScanResultsScreen extends StatelessWidget {
                     borderRadius: BorderRadius.circular(12),
                   ),
                   elevation: 5,
-                  shadowColor: const Color(0xFF13EC13).withOpacity(0.4),
+                  shadowColor: const Color(0xFF13EC13).withValues(alpha: 0.4),
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Icon(Icons.kitchen),
+                    if (_isImporting)
+                      const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    else
+                      const Icon(Icons.kitchen),
                     const SizedBox(width: 12),
                     Text(
-                      'Add ${receipt.recognizedCount} Items to Fridge',
+                      _isImporting
+                          ? 'Adding to Fridge...'
+                          : 'Add ${receipt.recognizedCount} Items to Fridge',
                       style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
@@ -288,17 +356,52 @@ class RecentScanResultsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildItemRow(
-    String name,
-    String qty,
-    String price, {
-    bool hasControls = false,
-  }) {
+  Color _categoryBadgeColor(FridgeCategory? category) {
+    switch (category) {
+      case FridgeCategory.produce:
+        return const Color(0xFF43A047);
+      case FridgeCategory.dairy:
+        return const Color(0xFF42A5F5);
+      case FridgeCategory.meat:
+        return const Color(0xFFE57373);
+      case FridgeCategory.beverages:
+        return const Color(0xFF26C6DA);
+      case FridgeCategory.condiments:
+        return const Color(0xFFFFA726);
+      case FridgeCategory.grains:
+        return const Color(0xFFD4A373);
+      case FridgeCategory.frozen:
+        return const Color(0xFF90CAF9);
+      case FridgeCategory.snacks:
+        return const Color(0xFFBA68C8);
+      case FridgeCategory.other:
+      case null:
+        return const Color(0xFF9E9E9E);
+    }
+  }
+
+  Widget _buildItemRow(ReceiptItem item, {bool hasControls = false}) {
+    final categoryEmoji = item.suggestedCategory?.emoji ?? '📦';
+    final categoryColor = _categoryBadgeColor(item.suggestedCategory);
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 17, right: 8),
+            child: Container(
+              width: 30,
+              height: 30,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: categoryColor.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(categoryEmoji, style: const TextStyle(fontSize: 16)),
+            ),
+          ),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -318,7 +421,7 @@ class RecentScanResultsScreen extends StatelessWidget {
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
-                    name,
+                    item.name,
                     style: const TextStyle(fontWeight: FontWeight.w500),
                   ),
                 ),
@@ -352,7 +455,7 @@ class RecentScanResultsScreen extends StatelessWidget {
                               color: Color(0xFF13EC13),
                             ),
                             Text(
-                              qty,
+                              '${item.quantity}',
                               style: const TextStyle(
                                 fontWeight: FontWeight.bold,
                               ),
@@ -366,7 +469,7 @@ class RecentScanResultsScreen extends StatelessWidget {
                         )
                       : Center(
                           child: Text(
-                            qty,
+                            '${item.quantity}',
                             style: const TextStyle(fontWeight: FontWeight.bold),
                           ),
                         ),
@@ -386,7 +489,7 @@ class RecentScanResultsScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  price,
+                  '\$${item.totalPrice.toStringAsFixed(2)}',
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
                     fontFamily: 'monospace',
@@ -440,7 +543,9 @@ class RecentScanResultsScreen extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.orange.withOpacity(0.5)),
+                    border: Border.all(
+                      color: Colors.orange.withValues(alpha: 0.5),
+                    ),
                   ),
                   child: Text(
                     item.name,

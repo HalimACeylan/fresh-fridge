@@ -28,6 +28,15 @@ class _RecipePreparationGuideScreenState
   void initState() {
     super.initState();
     _fridgeItems = FridgeService.instance.getAllItems();
+    _refreshFridgeItemsFromCloud();
+  }
+
+  Future<void> _refreshFridgeItemsFromCloud() async {
+    await FridgeService.instance.refreshFromCloud();
+    if (!mounted) return;
+    setState(() {
+      _fridgeItems = FridgeService.instance.getAllItems();
+    });
   }
 
   bool _ingredientMatchesFridgeItem(String ingredientName, String fridgeName) {
@@ -128,6 +137,7 @@ class _RecipePreparationGuideScreenState
         final deleted = await FridgeService.instance.deleteItemById(id);
         if (deleted) removedCount++;
       }
+      await FridgeService.instance.refreshFromCloud();
       _fridgeItems = FridgeService.instance.getAllItems();
     } finally {
       if (mounted) {

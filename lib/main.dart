@@ -4,6 +4,7 @@ import 'package:fridge_app/firebase_options.dart';
 import 'package:fridge_app/routes.dart';
 import 'package:fridge_app/services/fridge_service.dart';
 import 'package:fridge_app/services/receipt_service.dart';
+import 'package:fridge_app/services/user_household_service.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 Future<void> main() async {
@@ -13,12 +14,41 @@ Future<void> main() async {
 }
 
 Future<void> _initializeFirebaseAndServices() async {
+  const seedModeEnv = String.fromEnvironment(
+    'FIREBASE_SEED_MODE',
+    defaultValue: 'if-empty',
+  );
+
   try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
-    await FridgeService.instance.initialize();
-    await ReceiptService.instance.initialize();
+
+    await UserHouseholdService.instance.initialize();
+
+    final seedMode = switch (seedModeEnv.toLowerCase()) {
+      'overwrite' => 'overwrite',
+      'skip' => 'skip',
+      'clear' => 'clear',
+      _ => 'if-empty',
+    };
+
+    final forceReseed = seedMode == 'overwrite';
+    final seedIfEmpty = seedMode == 'if-empty';
+
+    await FridgeService.instance.initialize(
+      seedCloudIfEmpty: seedIfEmpty,
+      forceReseed: forceReseed,
+    );
+    await ReceiptService.instance.initialize(
+      seedCloudIfEmpty: seedIfEmpty,
+      forceReseed: forceReseed,
+    );
+
+    if (seedMode == 'clear') {
+      await FridgeService.instance.clearCloudForActiveHousehold();
+      await ReceiptService.instance.clearCloudForActiveHousehold();
+    }
   } catch (_) {
     // App continues with in-memory sample data when Firebase is unavailable.
   }

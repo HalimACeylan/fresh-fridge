@@ -20,8 +20,11 @@ class _SuggestedRecipesScreenState extends State<SuggestedRecipesScreen> {
   late final TextEditingController _recipeSearchController;
   late final TextEditingController _ingredientSearchController;
   late final FocusNode _ingredientFocusNode;
-  late final List<FridgeItem> _fridgeIngredients;
-  late final List<Recipe> _recipes;
+  late List<FridgeItem> _fridgeIngredients;
+  late List<Recipe> _recipes;
+  bool _didReadRouteArgs = false;
+  String? _pendingRouteIngredientId;
+  String? _pendingRouteIngredientName;
 
   final LinkedHashSet<String> _selectedIngredientIds = LinkedHashSet<String>();
   String _recipeSearchQuery = '';
@@ -34,7 +37,16 @@ class _SuggestedRecipesScreenState extends State<SuggestedRecipesScreen> {
     _ingredientSearchController = TextEditingController();
     _ingredientFocusNode = FocusNode();
     _ingredientFocusNode.addListener(() => setState(() {}));
+    _fridgeIngredients = const [];
+    _recipes = const [];
     _loadData();
+    _refreshFromCloud();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _readRouteFiltersIfNeeded();
   }
 
   @override
@@ -55,6 +67,75 @@ class _SuggestedRecipesScreenState extends State<SuggestedRecipesScreen> {
     _fridgeIngredients = uniqueByName.values.toList()
       ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
     _recipes = RecipeService.instance.getSuggestedRecipes();
+    _tryApplyPendingRouteFilter();
+  }
+
+  Future<void> _refreshFromCloud() async {
+    await FridgeService.instance.refreshFromCloud();
+    if (!mounted) return;
+    setState(() {
+      _loadData();
+    });
+  }
+
+  void _readRouteFiltersIfNeeded() {
+    if (_didReadRouteArgs) return;
+    _didReadRouteArgs = true;
+
+    final args = ModalRoute.of(context)?.settings.arguments;
+    if (args is! Map) return;
+
+    final routeMap = Map<String, dynamic>.from(args);
+    _pendingRouteIngredientId = routeMap['ingredientId'] as String?;
+    _pendingRouteIngredientName = routeMap['ingredientName'] as String?;
+
+    if (_tryApplyPendingRouteFilter()) {
+      setState(() {});
+    }
+  }
+
+  bool _tryApplyPendingRouteFilter() {
+    final ingredientId = _pendingRouteIngredientId;
+    final ingredientName = _pendingRouteIngredientName;
+    if (ingredientId == null && ingredientName == null) {
+      return false;
+    }
+
+    FridgeItem? match;
+    if (ingredientId != null) {
+      for (final item in _fridgeIngredients) {
+        if (item.id == ingredientId) {
+          match = item;
+          break;
+        }
+      }
+    }
+
+    if (match == null &&
+        ingredientName != null &&
+        ingredientName.trim().isNotEmpty) {
+      final normalizedName = ingredientName.trim().toLowerCase();
+      for (final item in _fridgeIngredients) {
+        final itemName = item.name.toLowerCase();
+        if (itemName == normalizedName ||
+            itemName.contains(normalizedName) ||
+            normalizedName.contains(itemName)) {
+          match = item;
+          break;
+        }
+      }
+    }
+
+    if (match == null) return false;
+    _pendingRouteIngredientId = null;
+    _pendingRouteIngredientName = null;
+
+    final wasAdded = _selectedIngredientIds.add(match.id);
+    if (wasAdded) {
+      _ingredientQuery = '';
+      _ingredientSearchController.clear();
+    }
+    return wasAdded;
   }
 
   List<FridgeItem> get _selectedIngredients {

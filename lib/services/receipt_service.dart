@@ -6,6 +6,7 @@ import 'package:fridge_app/models/fridge_item.dart';
 import 'package:fridge_app/models/receipt.dart';
 import 'package:fridge_app/models/units.dart';
 import 'package:fridge_app/services/fridge_service.dart';
+import 'package:fridge_app/services/user_household_service.dart';
 
 /// In-memory receipt service with item-to-fridge matching.
 ///
@@ -15,8 +16,8 @@ class ReceiptService {
   // Singleton
   ReceiptService._();
   static final ReceiptService instance = ReceiptService._();
-  static const String _householdId = 'default';
   static const String _rootCollection = 'households';
+  static const String _storeNameLowerField = 'storeNameLower';
 
   FirebaseFirestore? _firestore;
   bool _firebaseEnabled = false;
@@ -172,13 +173,18 @@ class ReceiptService {
     ),
   ];
 
+  String get _activeHouseholdId => UserHouseholdService.instance.householdId;
+
   CollectionReference<Map<String, dynamic>> get _receiptsCollection =>
       _firestore!
           .collection(_rootCollection)
-          .doc(_householdId)
+          .doc(_activeHouseholdId)
           .collection('receipts');
 
-  Future<void> initialize({bool seedCloudIfEmpty = true}) async {
+  Future<void> initialize({
+    bool seedCloudIfEmpty = true,
+    bool forceReseed = false,
+  }) async {
     if (_isInitialized) return;
     _isInitialized = true;
 
@@ -187,6 +193,9 @@ class ReceiptService {
     try {
       _firestore = FirebaseFirestore.instance;
       _firebaseEnabled = true;
+      if (forceReseed) {
+        await _seedCloudFromLocal(overwrite: true);
+      }
       await _syncFromCloud(seedCloudIfEmpty: seedCloudIfEmpty);
     } catch (_) {
       _firebaseEnabled = false;
@@ -204,25 +213,61 @@ class ReceiptService {
 
     if (query.docs.isEmpty) {
       if (seedCloudIfEmpty) {
-        await _seedCloudFromLocal();
+        await _seedCloudFromLocal(overwrite: false);
       }
       return;
     }
 
-    final cloudReceipts = query.docs.map((doc) {
-      final data = _normalizeReceiptMap(doc.data(), doc.id);
-      return Receipt.fromMap(data);
-    }).toList();
+    final cloudReceipts = _parseCloudSnapshot(query.docs)
+      ..sort((a, b) => b.scanDate.compareTo(a.scanDate));
 
     _receipts
       ..clear()
       ..addAll(cloudReceipts);
   }
 
-  Future<void> _seedCloudFromLocal() async {
+  Future<void> seedCloudFromLocal({bool overwrite = false}) async {
+    if (!_firebaseEnabled) return;
+    await _seedCloudFromLocal(overwrite: overwrite);
+    await _syncFromCloud(seedCloudIfEmpty: false);
+  }
+
+  /// Clears all receipts from the active household collection.
+  Future<void> clearCloudForActiveHousehold({
+    bool clearLocalCache = true,
+  }) async {
+    if (_firebaseEnabled) {
+      final existingDocs = await _receiptsCollection.get();
+      for (var i = 0; i < existingDocs.docs.length; i += 400) {
+        final batch = _firestore!.batch();
+        for (final doc in existingDocs.docs.skip(i).take(400)) {
+          batch.delete(doc.reference);
+        }
+        await batch.commit();
+      }
+    }
+
+    if (clearLocalCache) {
+      _receipts.clear();
+    }
+  }
+
+  Future<void> _seedCloudFromLocal({required bool overwrite}) async {
+    if (!_firebaseEnabled) return;
+
     final batch = _firestore!.batch();
+    if (overwrite) {
+      final existingDocs = await _receiptsCollection.get();
+      for (final doc in existingDocs.docs) {
+        batch.delete(doc.reference);
+      }
+    }
+
     for (final receipt in _receipts) {
-      batch.set(_receiptsCollection.doc(receipt.id), receipt.toMap());
+      batch.set(
+        _receiptsCollection.doc(receipt.id),
+        _toFirestoreMap(receipt, includeCreatedAt: true),
+      );
     }
     await batch.commit();
   }
@@ -231,6 +276,22 @@ class ReceiptService {
 
   /// All stored receipts.
   List<Receipt> getAllReceipts() => List.unmodifiable(_receipts);
+
+  /// Read all receipts directly from Firestore.
+  Future<List<Receipt>> readAllFromCloud({bool refreshCache = true}) async {
+    if (!_firebaseEnabled) return getAllReceipts();
+
+    final query = await _receiptsCollection.get();
+    final receipts = _parseCloudSnapshot(query.docs)
+      ..sort((a, b) => b.scanDate.compareTo(a.scanDate));
+
+    if (refreshCache) {
+      _receipts
+        ..clear()
+        ..addAll(receipts);
+    }
+    return receipts;
+  }
 
   /// Get a single receipt by ID.
   Receipt? getReceiptById(String id) {
@@ -241,35 +302,80 @@ class ReceiptService {
     }
   }
 
+  /// Read a single receipt directly from Firestore.
+  Future<Receipt?> readReceiptByIdFromCloud(String id) async {
+    if (!_firebaseEnabled) return getReceiptById(id);
+
+    final doc = await _receiptsCollection.doc(id).get();
+    if (!doc.exists || doc.data() == null) return null;
+    final data = _normalizeReceiptMap(doc.data()!, doc.id);
+    return Receipt.fromMap(data);
+  }
+
   /// Get receipts for a specific household.
   List<Receipt> getReceiptsByHousehold(String householdId) =>
       _receipts.where((r) => r.householdId == householdId).toList();
+
+  /// Query receipts by store name from Firestore.
+  Future<List<Receipt>> queryReceiptsByStoreFromCloud(
+    String storeQuery, {
+    int limit = 20,
+  }) async {
+    final normalizedQuery = storeQuery.trim().toLowerCase();
+    if (normalizedQuery.isEmpty || !_firebaseEnabled) return getAllReceipts();
+
+    try {
+      final snapshot = await _receiptsCollection
+          .orderBy(_storeNameLowerField)
+          .startAt([normalizedQuery])
+          .endAt(['$normalizedQuery\uf8ff'])
+          .limit(limit)
+          .get();
+      return _parseCloudSnapshot(snapshot.docs);
+    } catch (_) {
+      await refreshFromCloud();
+      return _receipts
+          .where(
+            (receipt) =>
+                receipt.storeName.toLowerCase().contains(normalizedQuery),
+          )
+          .toList();
+    }
+  }
 
   // ── Write operations ─────────────────────────────────────────────
 
   /// Add a new receipt.
   void addReceipt(Receipt receipt) {
-    final index = _receipts.indexWhere((existing) => existing.id == receipt.id);
+    final normalizedReceipt = _normalizeForActiveHousehold(receipt);
+    final index = _receipts.indexWhere(
+      (existing) => existing.id == normalizedReceipt.id,
+    );
+
+    final isNewReceipt = index == -1;
     if (index == -1) {
-      _receipts.add(receipt);
+      _receipts.add(normalizedReceipt);
     } else {
-      _receipts[index] = receipt;
+      _receipts[index] = normalizedReceipt;
     }
 
     if (_firebaseEnabled) {
-      unawaited(_upsertReceipt(receipt));
+      unawaited(
+        _upsertReceipt(normalizedReceipt, includeCreatedAt: isNewReceipt),
+      );
     }
   }
 
   /// Update a receipt (e.g., after verifying / editing items).
   void updateReceipt(Receipt updated) {
-    final index = _receipts.indexWhere((r) => r.id == updated.id);
+    final normalizedReceipt = _normalizeForActiveHousehold(updated);
+    final index = _receipts.indexWhere((r) => r.id == normalizedReceipt.id);
     if (index != -1) {
-      _receipts[index] = updated;
+      _receipts[index] = normalizedReceipt;
     }
 
     if (_firebaseEnabled) {
-      unawaited(_upsertReceipt(updated));
+      unawaited(_upsertReceipt(normalizedReceipt, includeCreatedAt: false));
     }
   }
 
@@ -347,6 +453,7 @@ class ReceiptService {
         subtotal: 0,
         tax: 0,
         total: 0,
+        householdId: _activeHouseholdId,
       );
     }
 
@@ -377,9 +484,15 @@ class ReceiptService {
     final newItems = <FridgeItem>[];
 
     for (final item in receipt.items) {
-      if (item.isUnknown || item.isMatched) continue;
+      if (item.isUnknown) continue;
 
-      final category = item.suggestedCategory ?? suggestCategory(item.name);
+      final matchedItem = item.matchedFridgeItemId == null
+          ? null
+          : fridgeService.getItemById(item.matchedFridgeItemId!);
+      final category =
+          item.suggestedCategory ??
+          matchedItem?.category ??
+          suggestCategory(item.name);
 
       final fridgeItem = FridgeItem(
         id: 'auto_${DateTime.now().millisecondsSinceEpoch}_${item.id}',
@@ -390,10 +503,19 @@ class ReceiptService {
         expiryDate: _estimateExpiry(category),
         addedDate: DateTime.now(),
         receiptId: receiptId,
+        householdId: _activeHouseholdId,
       );
 
       fridgeService.addItem(fridgeItem);
       newItems.add(fridgeItem);
+    }
+
+    if (newItems.isNotEmpty) {
+      final updatedItems = receipt.items.map((item) {
+        if (item.isUnknown) return item;
+        return item.copyWith(isVerified: true);
+      }).toList();
+      updateReceipt(receipt.copyWith(items: updatedItems));
     }
 
     return newItems;
@@ -435,8 +557,16 @@ class ReceiptService {
         .toList();
   }
 
-  Future<void> _upsertReceipt(Receipt receipt) async {
-    await _receiptsCollection.doc(receipt.id).set(receipt.toMap());
+  Future<void> _upsertReceipt(
+    Receipt receipt, {
+    required bool includeCreatedAt,
+  }) async {
+    await _receiptsCollection
+        .doc(receipt.id)
+        .set(
+          _toFirestoreMap(receipt, includeCreatedAt: includeCreatedAt),
+          SetOptions(merge: true),
+        );
   }
 
   Future<void> _deleteReceiptFromCloud(String id) async {
@@ -491,5 +621,35 @@ class ReceiptService {
   double _toDouble(dynamic value) {
     if (value is num) return value.toDouble();
     return 0.0;
+  }
+
+  List<Receipt> _parseCloudSnapshot(
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> docs,
+  ) {
+    return docs.map((doc) {
+      final data = _normalizeReceiptMap(doc.data(), doc.id);
+      return Receipt.fromMap(data);
+    }).toList();
+  }
+
+  Receipt _normalizeForActiveHousehold(Receipt receipt) {
+    final householdId = _activeHouseholdId;
+    if (receipt.householdId == householdId) return receipt;
+    return receipt.copyWith(householdId: householdId);
+  }
+
+  Map<String, dynamic> _toFirestoreMap(
+    Receipt receipt, {
+    required bool includeCreatedAt,
+  }) {
+    final normalizedReceipt = _normalizeForActiveHousehold(receipt);
+    final map = normalizedReceipt.toMap();
+    map[_storeNameLowerField] = normalizedReceipt.storeName.toLowerCase();
+    map.addAll(
+      UserHouseholdService.instance.buildAuditFields(
+        includeCreatedAt: includeCreatedAt,
+      ),
+    );
+    return map;
   }
 }

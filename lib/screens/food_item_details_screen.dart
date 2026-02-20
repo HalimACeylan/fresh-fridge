@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:fridge_app/models/fridge_item.dart'; // Import FridgeItem
+import 'package:fridge_app/routes.dart';
 import 'package:fridge_app/services/fridge_service.dart'; // Import FridgeService
 
 class FoodItemDetailsScreen extends StatelessWidget {
@@ -39,6 +40,17 @@ class FoodItemDetailsScreen extends StatelessWidget {
     }
 
     Navigator.pop(context, true);
+  }
+
+  void _openFilteredRecipesPage(BuildContext context, FridgeItem item) {
+    Navigator.pushNamed(
+      context,
+      AppRoutes.suggestedRecipes,
+      arguments: <String, dynamic>{
+        'ingredientId': item.id,
+        'ingredientName': item.name,
+      },
+    );
   }
 
   @override
@@ -184,9 +196,7 @@ class FoodItemDetailsScreen extends StatelessWidget {
                       _buildQuickAction(
                         icon: Icons.search,
                         label: 'Find Recipes',
-                        onTap: () {
-                          // Could navigate to SuggestedRecipes with filter
-                        },
+                        onTap: () => _openFilteredRecipesPage(context, item),
                       ),
                       const SizedBox(width: 12),
                       _buildQuickAction(

@@ -18,6 +18,18 @@ class _FridgeGridScreenState extends State<FridgeGridScreen> {
   FridgeCategory? _selectedCategory;
   bool _showExpiringOnly = false;
 
+  @override
+  void initState() {
+    super.initState();
+    _refreshFromCloud();
+  }
+
+  Future<void> _refreshFromCloud() async {
+    await FridgeService.instance.refreshFromCloud();
+    if (!mounted) return;
+    setState(() {});
+  }
+
   List<FridgeItem> get _filteredItems {
     final service = FridgeService.instance;
     List<FridgeItem> items;
@@ -42,7 +54,7 @@ class _FridgeGridScreenState extends State<FridgeGridScreen> {
 
     if (!mounted || didDelete != true) return;
 
-    setState(() {});
+    await _refreshFromCloud();
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text('${item.name} removed from fridge')));
