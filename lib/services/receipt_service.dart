@@ -30,94 +30,161 @@ class ReceiptService {
   // "orange juice" before "orange").
   static final Map<String, FridgeCategory> _categoryKeywords = {
     // Multi-word (checked first)
-    'ice cream': FridgeCategory.frozen,
-    'hot sauce': FridgeCategory.condiments,
-    'orange juice': FridgeCategory.beverages,
-    'soy sauce': FridgeCategory.condiments,
+    'ice cream': FridgeCategory.iceCream,
+    'hot dog': FridgeCategory.hotDog,
+    'hot sauce': FridgeCategory.sauce,
+    'orange juice': FridgeCategory.juice,
+    'soy sauce': FridgeCategory.sauce,
+    'frozen pizza': FridgeCategory.frozenPizza,
+    'sweet potato': FridgeCategory.sweetPotato,
+    'leafy green': FridgeCategory.leafyGreen,
 
-    // Produce
-    'spinach': FridgeCategory.produce,
-    'avocado': FridgeCategory.produce,
-    'kale': FridgeCategory.produce,
-    'tomato': FridgeCategory.produce,
-    'lettuce': FridgeCategory.produce,
-    'pepper': FridgeCategory.produce,
-    'onion': FridgeCategory.produce,
-    'garlic': FridgeCategory.produce,
-    'potato': FridgeCategory.produce,
-    'carrot': FridgeCategory.produce,
-    'broccoli': FridgeCategory.produce,
-    'cucumber': FridgeCategory.produce,
-    'apple': FridgeCategory.produce,
-    'banana': FridgeCategory.produce,
-    'orange': FridgeCategory.produce,
-    'lemon': FridgeCategory.produce,
-    'berry': FridgeCategory.produce,
-    'basil': FridgeCategory.produce,
-    'herb': FridgeCategory.produce,
-    'veggie': FridgeCategory.produce,
-    'salad': FridgeCategory.produce,
-    'mushroom': FridgeCategory.produce,
+    // Produce -> Specifics
+    'apple': FridgeCategory.apple,
+    'pear': FridgeCategory.pear,
+    'orange': FridgeCategory.orange,
+    'lemon': FridgeCategory.lemon,
+    'banana': FridgeCategory.banana,
+    'watermelon': FridgeCategory.watermelon,
+    'grape': FridgeCategory.grapes,
+    'strawberry': FridgeCategory.strawberry,
+    'blueberry': FridgeCategory.blueberry,
+    'melon': FridgeCategory.melon,
+    'cherry': FridgeCategory.cherry,
+    'peach': FridgeCategory.peach,
+    'mango': FridgeCategory.mango,
+    'pineapple': FridgeCategory.pineapple,
+    'coconut': FridgeCategory.coconut,
+    'kiwi': FridgeCategory.kiwi,
+    'avocado': FridgeCategory.avocado,
+    'tomato': FridgeCategory.tomato,
+    'potato': FridgeCategory.potato,
+    'carrot': FridgeCategory.carrot,
+    'corn': FridgeCategory.corn,
+    'pepper': FridgeCategory.bellPepper,
+    'cucumber': FridgeCategory.cucumber,
+    'broccoli': FridgeCategory.broccoli,
+    'garlic': FridgeCategory.garlic,
+    'onion': FridgeCategory.onion,
+    'mushroom': FridgeCategory.mushroom,
+    'eggplant': FridgeCategory.eggplant,
+    'spinach': FridgeCategory.leafyGreen,
+    'kale': FridgeCategory.leafyGreen,
+    'lettuce': FridgeCategory.leafyGreen,
+    'basil': FridgeCategory.leafyGreen,
+    'herb': FridgeCategory.leafyGreen,
+    'salad': FridgeCategory.vegetables,
+    'veggie': FridgeCategory.vegetables,
+    'fruit': FridgeCategory.fruits,
+    'produce': FridgeCategory.produce,
 
-    // Dairy
-    'milk': FridgeCategory.dairy,
-    'cheese': FridgeCategory.dairy,
+    // Dairy & Eggs
+    'milk': FridgeCategory.milk,
+    'cheese': FridgeCategory.cheese,
+    'butter': FridgeCategory.butter,
+    'egg': FridgeCategory.egg,
     'yogurt': FridgeCategory.dairy,
-    'butter': FridgeCategory.dairy,
     'cream': FridgeCategory.dairy,
-    'egg': FridgeCategory.dairy,
+    'dairy': FridgeCategory.dairy,
 
     // Meat & Seafood
-    'chicken': FridgeCategory.meat,
-    'beef': FridgeCategory.meat,
+    'poultry': FridgeCategory.poultry,
+    'chicken': FridgeCategory.poultry,
+    'turkey': FridgeCategory.poultry,
+    'beef': FridgeCategory.beef,
+    'steak': FridgeCategory.beef,
     'pork': FridgeCategory.meat,
-    'salmon': FridgeCategory.meat,
-    'fish': FridgeCategory.meat,
-    'shrimp': FridgeCategory.meat,
-    'turkey': FridgeCategory.meat,
-    'sausage': FridgeCategory.meat,
-    'bacon': FridgeCategory.meat,
-    'steak': FridgeCategory.meat,
+    'bacon': FridgeCategory.bacon,
+    'sausage': FridgeCategory.hotDog,
+    'fish': FridgeCategory.fish,
+    'salmon': FridgeCategory.fish,
+    'shrimp': FridgeCategory.shrimp,
+    'squid': FridgeCategory.squid,
+    'lobster': FridgeCategory.lobster,
+    'crab': FridgeCategory.crab,
+    'oyster': FridgeCategory.oyster,
     'lamb': FridgeCategory.meat,
-
-    // Beverages
-    'juice': FridgeCategory.beverages,
-    'water': FridgeCategory.beverages,
-    'soda': FridgeCategory.beverages,
-    'coffee': FridgeCategory.beverages,
-    'tea': FridgeCategory.beverages,
-    'kombucha': FridgeCategory.beverages,
-
-    // Condiments
-    'sauce': FridgeCategory.condiments,
-    'ketchup': FridgeCategory.condiments,
-    'mustard': FridgeCategory.condiments,
-    'dressing': FridgeCategory.condiments,
-    'mayo': FridgeCategory.condiments,
-    'pesto': FridgeCategory.condiments,
-    'vinegar': FridgeCategory.condiments,
-    'soy': FridgeCategory.condiments,
+    'meat': FridgeCategory.meat,
 
     // Grains & Bakery
-    'bread': FridgeCategory.grains,
-    'pasta': FridgeCategory.grains,
-    'rice': FridgeCategory.grains,
-    'tortilla': FridgeCategory.grains,
-    'bagel': FridgeCategory.grains,
+    'bread': FridgeCategory.bread,
+    'croissant': FridgeCategory.croissant,
+    'baguette': FridgeCategory.baguette,
+    'flatbread': FridgeCategory.flatbread,
+    'tortilla': FridgeCategory.flatbread,
+    'pretzel': FridgeCategory.pretzel,
+    'bagel': FridgeCategory.bagel,
+    'pancake': FridgeCategory.pancakes,
+    'waffle': FridgeCategory.waffle,
+    'rice': FridgeCategory.rice,
+    'pasta': FridgeCategory.pasta,
     'cereal': FridgeCategory.grains,
     'oat': FridgeCategory.grains,
     'flour': FridgeCategory.grains,
+    'grains': FridgeCategory.grains,
 
-    // Frozen
-    'frozen': FridgeCategory.frozen,
-    'pizza': FridgeCategory.frozen,
+    // Prepared Foods & Fast Food
+    'pizza': FridgeCategory.pizza,
+    'hamburger': FridgeCategory.hamburger,
+    'burger': FridgeCategory.hamburger,
+    'fries': FridgeCategory.fries,
+    'sandwich': FridgeCategory.sandwich,
+    'taco': FridgeCategory.taco,
+    'burrito': FridgeCategory.burrito,
+    'sushi': FridgeCategory.sushi,
+    'bento': FridgeCategory.bento,
+    'curry': FridgeCategory.curry,
+    'stew': FridgeCategory.stew,
+    'soup': FridgeCategory.stew,
+    'dumpling': FridgeCategory.dumpling,
 
-    // Snacks
-    'chip': FridgeCategory.snacks,
+    // Condiments & Cooking
+    'salt': FridgeCategory.salt,
+    'sauce': FridgeCategory.sauce,
+    'ketchup': FridgeCategory.sauce,
+    'mustard': FridgeCategory.sauce,
+    'dressing': FridgeCategory.sauce,
+    'mayo': FridgeCategory.sauce,
+    'pesto': FridgeCategory.sauce,
+    'honey': FridgeCategory.honey,
+    'vinegar': FridgeCategory.condiments,
+    'soy': FridgeCategory.sauce,
+    'condiment': FridgeCategory.condiments,
+
+    // Snacks & Sweets
+    'snack': FridgeCategory.snacks,
+    'popcorn': FridgeCategory.popcorn,
+    'chip': FridgeCategory.chips,
     'cracker': FridgeCategory.snacks,
+    'cookie': FridgeCategory.cookie,
+    'chocolate': FridgeCategory.chocolate,
+    'candy': FridgeCategory.candy,
+    'lollipop': FridgeCategory.lollipop,
+    'cake': FridgeCategory.cake,
+    'pie': FridgeCategory.pie,
     'hummus': FridgeCategory.snacks,
     'nut': FridgeCategory.snacks,
     'granola': FridgeCategory.snacks,
+
+    // Beverages
+    'water': FridgeCategory.water,
+    'juice': FridgeCategory.juice,
+    'soda': FridgeCategory.soda,
+    'pop': FridgeCategory.soda,
+    'tea': FridgeCategory.tea,
+    'coffee': FridgeCategory.coffee,
+    'beer': FridgeCategory.beer,
+    'wine': FridgeCategory.wine,
+    'liquor': FridgeCategory.liquor,
+    'kombucha': FridgeCategory.beverages,
+    'beverage': FridgeCategory.beverages,
+
+    // Frozen
+    'frozen': FridgeCategory.frozen,
+    'ice': FridgeCategory.iceCube,
+
+    // Catch-all
+    'other': FridgeCategory.other,
   };
 
   // ── Sample data ──────────────────────────────────────────────────
@@ -504,6 +571,7 @@ class ReceiptService {
         addedDate: DateTime.now(),
         receiptId: receiptId,
         householdId: _activeHouseholdId,
+        isFrozen: item.isFrozen,
       );
 
       fridgeService.addItem(fridgeItem);
@@ -525,27 +593,7 @@ class ReceiptService {
 
   /// Estimate a default expiry based on category.
   DateTime _estimateExpiry(FridgeCategory category) {
-    final now = DateTime.now();
-    switch (category) {
-      case FridgeCategory.produce:
-        return now.add(const Duration(days: 5));
-      case FridgeCategory.dairy:
-        return now.add(const Duration(days: 7));
-      case FridgeCategory.meat:
-        return now.add(const Duration(days: 3));
-      case FridgeCategory.beverages:
-        return now.add(const Duration(days: 14));
-      case FridgeCategory.condiments:
-        return now.add(const Duration(days: 60));
-      case FridgeCategory.grains:
-        return now.add(const Duration(days: 14));
-      case FridgeCategory.frozen:
-        return now.add(const Duration(days: 90));
-      case FridgeCategory.snacks:
-        return now.add(const Duration(days: 14));
-      case FridgeCategory.other:
-        return now.add(const Duration(days: 7));
-    }
+    return DateTime.now().add(Duration(days: category.defaultExpiryDays));
   }
 
   /// Break a string into meaningful words (>2 chars) for matching.

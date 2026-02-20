@@ -9,6 +9,7 @@ class ReceiptItem {
   final double totalPrice;
   final bool isVerified;
   final bool isUnknown;
+  final bool isFrozen;
 
   /// ID of the fridge item this receipt item was matched to (if any).
   final String? matchedFridgeItemId;
@@ -24,6 +25,7 @@ class ReceiptItem {
     required this.totalPrice,
     this.isVerified = false,
     this.isUnknown = false,
+    this.isFrozen = false,
     this.matchedFridgeItemId,
     this.suggestedCategory,
   });
@@ -44,6 +46,7 @@ class ReceiptItem {
       'totalPrice': totalPrice,
       'isVerified': isVerified,
       'isUnknown': isUnknown,
+      'isFrozen': isFrozen,
       'matchedFridgeItemId': matchedFridgeItemId,
       'suggestedCategory': suggestedCategory?.name,
     };
@@ -58,6 +61,7 @@ class ReceiptItem {
       totalPrice: (map['totalPrice'] as num).toDouble(),
       isVerified: map['isVerified'] as bool? ?? false,
       isUnknown: map['isUnknown'] as bool? ?? false,
+      isFrozen: map['isFrozen'] as bool? ?? false,
       matchedFridgeItemId: map['matchedFridgeItemId'] as String?,
       suggestedCategory: map['suggestedCategory'] != null
           ? FridgeCategory.values.firstWhere(
@@ -76,6 +80,7 @@ class ReceiptItem {
     double? totalPrice,
     bool? isVerified,
     bool? isUnknown,
+    bool? isFrozen,
     String? matchedFridgeItemId,
     FridgeCategory? suggestedCategory,
   }) {
@@ -87,6 +92,7 @@ class ReceiptItem {
       totalPrice: totalPrice ?? this.totalPrice,
       isVerified: isVerified ?? this.isVerified,
       isUnknown: isUnknown ?? this.isUnknown,
+      isFrozen: isFrozen ?? this.isFrozen,
       matchedFridgeItemId: matchedFridgeItemId ?? this.matchedFridgeItemId,
       suggestedCategory: suggestedCategory ?? this.suggestedCategory,
     );
