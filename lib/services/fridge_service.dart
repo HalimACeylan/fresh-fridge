@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart';
 import 'package:fridge_app/models/fridge_item.dart';
 import 'package:fridge_app/models/units.dart';
 import 'package:fridge_app/services/user_household_service.dart';
@@ -22,6 +23,13 @@ class FridgeService {
   FirebaseFirestore? _firestore;
   bool _firebaseEnabled = false;
   bool _isInitialized = false;
+
+  @visibleForTesting
+  void setFirestoreForTesting(FirebaseFirestore firestore) {
+    _firestore = firestore;
+    _firebaseEnabled = true;
+    _isInitialized = true;
+  }
 
   // ── Sample data ──────────────────────────────────────────────────
 

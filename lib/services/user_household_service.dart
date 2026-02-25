@@ -45,6 +45,25 @@ class UserHouseholdService {
   bool get canManageMembers => isOwner || isAdmin;
   bool get canManageHousehold => canManageMembers;
 
+  @visibleForTesting
+  void setAuthAndFirestoreForTesting({
+    required FirebaseAuth auth,
+    required FirebaseFirestore firestore,
+    String? testUserId,
+    String? testHouseholdId,
+  }) {
+    _auth = auth;
+    _firestore = firestore;
+    _firebaseEnabled = true;
+    _isInitialized = true;
+    if (testUserId != null) {
+      _userId = testUserId;
+    }
+    if (testHouseholdId != null) {
+      _householdId = testHouseholdId;
+    }
+  }
+
   Future<void> initialize() async {
     if (_isInitialized) return;
     _isInitialized = true;
@@ -52,18 +71,23 @@ class UserHouseholdService {
     if (Firebase.apps.isEmpty) return;
 
     try {
-      _auth = FirebaseAuth.instance;
-      _firestore = FirebaseFirestore.instance;
+      _auth ??= FirebaseAuth.instance;
+      _firestore ??= FirebaseFirestore.instance;
       final user = await _ensureAuthenticatedUser();
       if (user == null) {
-        _firebaseEnabled = false;
+        if (!_firebaseEnabled) _firebaseEnabled = false;
         return;
       }
-      _userId = user.uid;
+
+      // We only update `_userId` if it matches fallback or was not set by tests
+      if (_userId == _fallbackUserId) {
+        _userId = user.uid;
+      }
+
       await _ensureUserAndHouseholdDocuments(user);
       _firebaseEnabled = true;
     } catch (_) {
-      _firebaseEnabled = false;
+      if (!_firebaseEnabled) _firebaseEnabled = false;
     }
   }
 
@@ -120,7 +144,16 @@ class UserHouseholdService {
     final userRef = users.doc(user.uid);
     final userSnapshot = await userRef.get();
     final userData = userSnapshot.data();
-    final existingHouseholdId = userData?['primaryHouseholdId'] as String?;
+
+    // If testing has forcefully injected household Id via TestSeeder, use it
+    String? existingHouseholdId = userData?['primaryHouseholdId'] as String?;
+
+    // Fallback to currently configured testing ID if the cloud doc isn't immediately ready
+    if (existingHouseholdId == null || existingHouseholdId.isEmpty) {
+      if (_householdId != _fallbackHouseholdId) {
+        existingHouseholdId = _householdId;
+      }
+    }
 
     if (existingHouseholdId != null && existingHouseholdId.isNotEmpty) {
       final householdRef = firestore

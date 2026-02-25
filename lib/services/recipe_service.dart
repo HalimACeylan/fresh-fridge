@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import 'package:fridge_app/models/recipe.dart';
 import 'package:fridge_app/services/fridge_service.dart';
 
@@ -6,6 +8,17 @@ class RecipeService {
   // Singleton
   RecipeService._();
   static final RecipeService instance = RecipeService._();
+
+  FirebaseFirestore? _firestore;
+  bool _firebaseEnabled = false;
+  bool _isInitialized = false;
+
+  @visibleForTesting
+  void setFirestoreForTesting(FirebaseFirestore firestore) {
+    _firestore = firestore;
+    _firebaseEnabled = true;
+    _isInitialized = true;
+  }
 
   // ── Sample Data ──────────────────────────────────────────────────
 
