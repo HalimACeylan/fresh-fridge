@@ -1,4 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:fridge_app/services/user_household_service.dart';
 
@@ -21,6 +20,12 @@ class _HouseholdMemberDetailsScreenState
   Map<String, dynamic>? _member;
   String? _selectedRole;
   String? _loadError;
+
+  // Toggle-based permissions (UI only; synced from role)
+  bool _canAddItems = true;
+  bool _canEditInventory = true;
+  bool _canMealPlan = false;
+  bool _canInviteMembers = false;
 
   static const List<String> _ownerRoleOptions = ['member', 'admin', 'owner'];
   static const List<String> _adminRoleOptions = ['member'];
@@ -84,10 +89,12 @@ class _HouseholdMemberDetailsScreenState
         return;
       }
 
+      final role = (cloudMember['role'] as String?)?.toLowerCase() ?? 'member';
       setState(() {
         _member = cloudMember;
-        _selectedRole = cloudMember['role'] as String? ?? 'member';
+        _selectedRole = role;
         _isLoading = false;
+        _syncPermissionsFromRole(role);
       });
     } catch (e) {
       if (!mounted) return;
@@ -96,6 +103,14 @@ class _HouseholdMemberDetailsScreenState
         _loadError = 'Could not load member details: $e';
       });
     }
+  }
+
+  void _syncPermissionsFromRole(String role) {
+    final r = role.toLowerCase();
+    _canAddItems = true;
+    _canEditInventory = r == 'owner' || r == 'admin';
+    _canMealPlan = r == 'owner' || r == 'admin';
+    _canInviteMembers = r == 'owner';
   }
 
   bool get _isCurrentUser => _memberId == _service.userId;
@@ -179,7 +194,7 @@ class _HouseholdMemberDetailsScreenState
           ),
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text('Remove'),
+            child: const Text('Remove', style: TextStyle(color: Colors.red)),
           ),
         ],
       ),
@@ -214,66 +229,368 @@ class _HouseholdMemberDetailsScreenState
 
   @override
   Widget build(BuildContext context) {
-    final member = _member;
-    final role = (member?['role'] as String?)?.toLowerCase() ?? 'member';
-    final selectedRole = _selectedRole ?? role;
-
     return Scaffold(
       backgroundColor: const Color(0xFFF6F8F6),
-      appBar: AppBar(title: const Text('Member Details'), centerTitle: true),
+      appBar: AppBar(
+        title: const Text(
+          'Member Details',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        centerTitle: true,
+        backgroundColor: Colors.white,
+        foregroundColor: const Color(0xFF102210),
+        elevation: 0,
+      ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _loadError != null
           ? _buildErrorState()
-          : member == null
+          : _member == null
           ? _buildErrorState(message: 'Member not found.')
-          : ListView(
-              padding: const EdgeInsets.all(20),
-              children: [
-                _buildProfileCard(member),
-                const SizedBox(height: 16),
-                _buildPermissionCard(role: selectedRole),
-                const SizedBox(height: 16),
-                if (_canManageMember) ...[
-                  _buildRoleSelector(selectedRole),
-                  const SizedBox(height: 16),
-                ],
-                if (!_canManageMember)
-                  const Text(
-                    'You can view this member, but only owner/admin can change permissions.',
-                    style: TextStyle(color: Colors.grey),
-                  ),
-                const SizedBox(height: 24),
-                if (_canManageMember)
-                  FilledButton(
-                    onPressed: _isSaving ? null : _saveRole,
-                    style: FilledButton.styleFrom(
-                      backgroundColor: const Color(0xFF13EC13),
-                      foregroundColor: const Color(0xFF102210),
-                      minimumSize: const Size.fromHeight(52),
+          : _buildContent(),
+    );
+  }
+
+  Widget _buildContent() {
+    final member = _member!;
+    final role =
+        (_selectedRole ?? (member['role'] as String?))?.toLowerCase() ??
+        'member';
+
+    return Stack(
+      children: [
+        ListView(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 120),
+          children: [
+            _buildAvatarHeader(member),
+            const SizedBox(height: 24),
+            if (_canManageMember) ...[
+              _buildRoleSection(role),
+              const SizedBox(height: 16),
+            ],
+            _buildPermissionsSection(),
+            const SizedBox(height: 24),
+            if (_canManageMember) _buildDangerZone(),
+            const SizedBox(height: 8),
+            if (!_canManageMember)
+              Text(
+                'You can view this member, but only owner/admin can change permissions.',
+                style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                textAlign: TextAlign.center,
+              ),
+          ],
+        ),
+        if (_canManageMember)
+          Positioned(
+            left: 20,
+            right: 20,
+            bottom: 24,
+            child: FilledButton(
+              onPressed: _isSaving ? null : _saveRole,
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF13EC13),
+                foregroundColor: const Color(0xFF102210),
+                minimumSize: const Size.fromHeight(52),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+              child: _isSaving
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text(
+                      'Save Permissions',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
                     ),
-                    child: _isSaving
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildAvatarHeader(Map<String, dynamic> member) {
+    final name = _memberDisplayName(member);
+    final email = (member['email'] as String?)?.trim();
+    final initials = _initials(name);
+
+    return Column(
+      children: [
+        CircleAvatar(
+          radius: 40,
+          backgroundColor: const Color(0xFF13EC13).withValues(alpha: 0.2),
+          child: Text(
+            initials,
+            style: const TextStyle(
+              color: Color(0xFF102210),
+              fontWeight: FontWeight.bold,
+              fontSize: 28,
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Text(
+          _isCurrentUser ? '$name (You)' : name,
+          style: const TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: Color(0xFF102210),
+          ),
+        ),
+        if (email != null && email.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Text(email, style: TextStyle(color: Colors.grey[600], fontSize: 13)),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildRoleSection(String selectedRole) {
+    final options = _roleOptions;
+    if (options.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'HOUSEHOLD ROLE',
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1,
+            color: Colors.grey[500],
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Column(
+            children: options.asMap().entries.map((entry) {
+              final idx = entry.key;
+              final roleOpt = entry.value;
+              final isSelected = selectedRole == roleOpt;
+              final isLast = idx == options.length - 1;
+
+              return GestureDetector(
+                onTap: _isSaving
+                    ? null
+                    : () => setState(() {
+                        _selectedRole = roleOpt;
+                        _syncPermissionsFromRole(roleOpt);
+                      }),
+                child: Container(
+                  decoration: BoxDecoration(
+                    border: isLast
+                        ? null
+                        : Border(
+                            bottom: BorderSide(
+                              color: Colors.grey.shade100,
+                              width: 1,
+                            ),
+                          ),
+                  ),
+                  child: ListTile(
+                    leading: Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? const Color(0xFF13EC13).withValues(alpha: 0.12)
+                            : Colors.grey.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(
+                        _roleIcon(roleOpt),
+                        size: 20,
+                        color: isSelected
+                            ? const Color(0xFF0DA80D)
+                            : Colors.grey[500],
+                      ),
+                    ),
+                    title: Text(
+                      _roleLabel(roleOpt),
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: isSelected
+                            ? const Color(0xFF102210)
+                            : Colors.grey[700],
+                      ),
+                    ),
+                    subtitle: Text(
+                      _roleDescription(roleOpt),
+                      style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+                    ),
+                    trailing: isSelected
+                        ? const Icon(
+                            Icons.check_circle_rounded,
+                            color: Color(0xFF13EC13),
                           )
-                        : const Text('Save Permissions'),
+                        : Icon(
+                            Icons.radio_button_unchecked,
+                            color: Colors.grey[300],
+                          ),
                   ),
-                const SizedBox(height: 12),
-                if (_canManageMember)
-                  OutlinedButton.icon(
-                    onPressed: _isSaving ? null : _removeMember,
-                    icon: const Icon(Icons.person_remove_alt_1),
-                    label: const Text('Remove Member'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.red,
-                      side: const BorderSide(color: Colors.red),
-                      minimumSize: const Size.fromHeight(52),
-                    ),
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPermissionsSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'PERMISSIONS',
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1,
+            color: Colors.grey[500],
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Column(
+            children: [
+              _buildPermissionToggle(
+                title: 'Can Add Items',
+                subtitle: 'Allow adding new groceries to fridge',
+                value: _canAddItems,
+                onChanged: _canManageMember
+                    ? (v) => setState(() => _canAddItems = v)
+                    : null,
+              ),
+              _buildDivider(),
+              _buildPermissionToggle(
+                title: 'Can Edit Inventory',
+                subtitle: 'Update quantities and expiration dates',
+                value: _canEditInventory,
+                onChanged: _canManageMember
+                    ? (v) => setState(() => _canEditInventory = v)
+                    : null,
+              ),
+              _buildDivider(),
+              _buildPermissionToggle(
+                title: 'Can Meal Plan',
+                subtitle: 'Create and edit family meal schedules',
+                value: _canMealPlan,
+                onChanged: _canManageMember
+                    ? (v) => setState(() => _canMealPlan = v)
+                    : null,
+              ),
+              _buildDivider(),
+              _buildPermissionToggle(
+                title: 'Can Invite Members',
+                subtitle: 'Generate and share household codes',
+                value: _canInviteMembers,
+                onChanged: _canManageMember
+                    ? (v) => setState(() => _canInviteMembers = v)
+                    : null,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPermissionToggle({
+    required String title,
+    required String subtitle,
+    required bool value,
+    required ValueChanged<bool>? onChanged,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
                   ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: TextStyle(color: Colors.grey[500], fontSize: 12),
+                ),
               ],
             ),
+          ),
+          Switch(
+            value: value,
+            onChanged: onChanged,
+            activeThumbColor: const Color(0xFF13EC13),
+            activeTrackColor: const Color(0xFF13EC13).withValues(alpha: 0.3),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDivider() {
+    return Divider(
+      height: 1,
+      indent: 16,
+      endIndent: 16,
+      color: Colors.grey.shade100,
+    );
+  }
+
+  Widget _buildDangerZone() {
+    return Column(
+      children: [
+        GestureDetector(
+          onTap: _isSaving ? null : _removeMember,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(
+                Icons.person_remove_alt_1_outlined,
+                color: Colors.red,
+                size: 18,
+              ),
+              const SizedBox(width: 6),
+              const Text(
+                'Remove from Household',
+                style: TextStyle(
+                  color: Colors.red,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'The member will no longer have access to the shared fridge inventory and meal plans.',
+          style: TextStyle(color: Colors.grey[500], fontSize: 12),
+          textAlign: TextAlign.center,
+        ),
+      ],
     );
   }
 
@@ -296,183 +613,15 @@ class _HouseholdMemberDetailsScreenState
     );
   }
 
-  Widget _buildProfileCard(Map<String, dynamic> member) {
-    final name = _memberDisplayName(member);
-    final email = (member['email'] as String?)?.trim();
-    final roleLabel = _roleLabel((member['role'] as String?) ?? 'member');
-    final initials = _initials(name);
-    final joinedText = _formatJoinedAt(member['joinedAt']);
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          CircleAvatar(
-            radius: 24,
-            backgroundColor: const Color(0xFF13EC13).withValues(alpha: 0.15),
-            child: Text(
-              initials,
-              style: const TextStyle(
-                color: Color(0xFF102210),
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  _isCurrentUser ? '$name (You)' : name,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  roleLabel,
-                  style: TextStyle(
-                    color: Colors.grey[600],
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                if (email != null && email.isNotEmpty) ...[
-                  const SizedBox(height: 4),
-                  Text(email, style: TextStyle(color: Colors.grey[700])),
-                ],
-                if (joinedText != null) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    'Joined $joinedText',
-                    style: TextStyle(color: Colors.grey[500], fontSize: 12),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPermissionCard({required String role}) {
-    final canManageMembers = role == 'owner' || role == 'admin';
-    final canManageBilling = role == 'owner';
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Permissions',
-            style: TextStyle(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          _buildPermissionRow(
-            label: 'Can add/edit fridge items',
-            enabled: true,
-          ),
-          _buildPermissionRow(
-            label: 'Can manage members',
-            enabled: canManageMembers,
-          ),
-          _buildPermissionRow(
-            label: 'Can manage billing',
-            enabled: canManageBilling,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPermissionRow({required String label, required bool enabled}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        children: [
-          Icon(
-            enabled ? Icons.check_circle : Icons.remove_circle_outline,
-            color: enabled ? const Color(0xFF13EC13) : Colors.grey,
-            size: 18,
-          ),
-          const SizedBox(width: 8),
-          Text(label),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRoleSelector(String selectedRole) {
-    final options = _roleOptions;
-    final safeSelection = options.contains(selectedRole)
-        ? selectedRole
-        : options.first;
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Role Access',
-            style: TextStyle(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          DropdownButtonFormField<String>(
-            initialValue: safeSelection,
-            decoration: const InputDecoration(
-              border: OutlineInputBorder(),
-              labelText: 'Role',
-            ),
-            items: options
-                .map(
-                  (role) => DropdownMenuItem<String>(
-                    value: role,
-                    child: Text(_roleLabel(role)),
-                  ),
-                )
-                .toList(),
-            onChanged: _isSaving
-                ? null
-                : (value) {
-                    if (value == null) return;
-                    setState(() {
-                      _selectedRole = value;
-                    });
-                  },
-          ),
-        ],
-      ),
-    );
-  }
-
-  String _memberDisplayName(Map<String, dynamic> member) {
-    final displayName = (member['displayName'] as String?)?.trim();
-    if (displayName != null && displayName.isNotEmpty) {
-      return displayName;
+  IconData _roleIcon(String role) {
+    switch (role.toLowerCase()) {
+      case 'owner':
+        return Icons.admin_panel_settings_rounded;
+      case 'admin':
+        return Icons.manage_accounts_rounded;
+      default:
+        return Icons.person_rounded;
     }
-
-    final email = (member['email'] as String?)?.trim();
-    if (email != null && email.isNotEmpty) {
-      return email.split('@').first;
-    }
-    return member['id'] as String? ?? 'Member';
   }
 
   String _roleLabel(String role) {
@@ -486,49 +635,33 @@ class _HouseholdMemberDetailsScreenState
     }
   }
 
+  String _roleDescription(String role) {
+    switch (role.toLowerCase()) {
+      case 'owner':
+        return 'Full household control';
+      case 'admin':
+        return 'Manage members & content';
+      default:
+        return 'Standard household access';
+    }
+  }
+
+  String _memberDisplayName(Map<String, dynamic> member) {
+    final displayName = (member['displayName'] as String?)?.trim();
+    if (displayName != null && displayName.isNotEmpty) return displayName;
+    final email = (member['email'] as String?)?.trim();
+    if (email != null && email.isNotEmpty) return email.split('@').first;
+    return member['id'] as String? ?? 'Member';
+  }
+
   String _initials(String value) {
     final parts = value
         .split(RegExp(r'\s+'))
         .where((part) => part.trim().isNotEmpty)
         .toList();
     if (parts.isEmpty) return '?';
-    if (parts.length == 1) {
-      return parts.first.substring(0, 1).toUpperCase();
-    }
+    if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
     return (parts.first.substring(0, 1) + parts[1].substring(0, 1))
         .toUpperCase();
-  }
-
-  String? _formatJoinedAt(dynamic raw) {
-    DateTime? date;
-    if (raw is Timestamp) {
-      date = raw.toDate();
-    } else if (raw is DateTime) {
-      date = raw;
-    } else if (raw is int) {
-      date = DateTime.fromMillisecondsSinceEpoch(raw);
-    }
-    if (date == null) return null;
-    final month = _monthAbbr(date.month);
-    return '$month ${date.day}, ${date.year}';
-  }
-
-  String _monthAbbr(int month) {
-    const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
-    if (month < 1 || month > 12) return 'N/A';
-    return months[month - 1];
   }
 }

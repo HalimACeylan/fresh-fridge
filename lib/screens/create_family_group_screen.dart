@@ -1,6 +1,8 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:fridge_app/services/user_household_service.dart';
+import 'package:image_picker/image_picker.dart';
 
 class CreateFamilyGroupScreen extends StatefulWidget {
   const CreateFamilyGroupScreen({super.key});
@@ -19,6 +21,7 @@ class _CreateFamilyGroupScreenState extends State<CreateFamilyGroupScreen> {
   bool _isSaving = false;
   String? _loadError;
   String _inviteCode = 'N/A';
+  File? _selectedImage;
 
   @override
   void initState() {
@@ -73,6 +76,20 @@ class _CreateFamilyGroupScreenState extends State<CreateFamilyGroupScreen> {
         _loadError = 'Could not load household: $e';
       });
     }
+  }
+
+  Future<void> _pickImageFromGallery() async {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 85,
+      maxWidth: 800,
+      maxHeight: 800,
+    );
+    if (picked == null || !mounted) return;
+    setState(() {
+      _selectedImage = File(picked.path);
+    });
   }
 
   Future<void> _saveHousehold() async {
@@ -164,11 +181,60 @@ class _CreateFamilyGroupScreenState extends State<CreateFamilyGroupScreen> {
       );
       return;
     }
-
     Clipboard.setData(ClipboardData(text: _inviteCode));
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(const SnackBar(content: Text('Invite code copied.')));
+  }
+
+  Future<void> _leaveHousehold() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Leave Household'),
+        content: const Text(
+          'Are you sure you want to leave this household? '
+          'You will lose access to the shared fridge and meal plans.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Leave', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true || !mounted) return;
+
+    setState(() {
+      _isSaving = true;
+    });
+    try {
+      // TODO: wire to service.leaveHousehold() when available
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('You have left the household.')),
+      );
+      // Pop twice to go back past admin screen
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not leave household: $e')));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
+    }
   }
 
   @override
@@ -181,6 +247,9 @@ class _CreateFamilyGroupScreenState extends State<CreateFamilyGroupScreen> {
           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
         ),
         centerTitle: true,
+        backgroundColor: Colors.white,
+        foregroundColor: const Color(0xFF102210),
+        elevation: 0,
         leading: IconButton(
           onPressed: () => Navigator.pop(context),
           icon: const Icon(Icons.arrow_back),
@@ -193,6 +262,7 @@ class _CreateFamilyGroupScreenState extends State<CreateFamilyGroupScreen> {
               style: TextStyle(
                 color: Color(0xFF13EC13),
                 fontWeight: FontWeight.bold,
+                fontSize: 16,
               ),
             ),
           ),
@@ -223,143 +293,268 @@ class _CreateFamilyGroupScreenState extends State<CreateFamilyGroupScreen> {
                 ),
               ),
             )
-          : Stack(
+          : _buildForm(),
+    );
+  }
+
+  Widget _buildForm() {
+    return Stack(
+      children: [
+        ListView(
+          padding: const EdgeInsets.fromLTRB(20, 24, 20, 160),
+          children: [
+            _buildAvatarSection(),
+            const SizedBox(height: 28),
+            _buildFieldsSection(),
+            const SizedBox(height: 20),
+            _buildInviteCodeSection(),
+          ],
+        ),
+        Positioned(
+          left: 20,
+          right: 20,
+          bottom: 68,
+          child: FilledButton(
+            onPressed: _isSaving ? null : _saveHousehold,
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF13EC13),
+              foregroundColor: const Color(0xFF102210),
+              minimumSize: const Size.fromHeight(52),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+            ),
+            child: _isSaving
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Text(
+                    'Save Household',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
+          ),
+        ),
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 20,
+          child: Center(
+            child: TextButton(
+              onPressed: _isSaving ? null : _leaveHousehold,
+              child: const Text(
+                'Leave Household',
+                style: TextStyle(
+                  color: Colors.red,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAvatarSection() {
+    return Center(
+      child: Column(
+        children: [
+          GestureDetector(
+            onTap: _pickImageFromGallery,
+            child: Stack(
               children: [
-                ListView(
-                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 100),
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: const [
-                          Text(
-                            'Household',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          SizedBox(height: 6),
-                          Text(
-                            'Each user gets a default household automatically. '
-                            'Use this page to rename and manage it.',
-                            style: TextStyle(color: Colors.grey),
-                          ),
-                        ],
-                      ),
+                Container(
+                  width: 88,
+                  height: 88,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade200,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: const Color(0xFF13EC13).withValues(alpha: 0.3),
+                      width: 2,
                     ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: _nameController,
-                      textInputAction: TextInputAction.next,
-                      maxLength: 80,
-                      decoration: const InputDecoration(
-                        labelText: 'Household Name',
-                        hintText: 'e.g. The Miller Family',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.all(Radius.circular(12)),
-                        ),
-                        filled: true,
-                        fillColor: Colors.white,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _descriptionController,
-                      minLines: 2,
-                      maxLines: 4,
-                      maxLength: 240,
-                      decoration: const InputDecoration(
-                        labelText: 'Description',
-                        hintText:
-                            'Optional notes for your household and food workflow.',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.all(Radius.circular(12)),
-                        ),
-                        filled: true,
-                        fillColor: Colors.white,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Invite Code',
-                            style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  child: ClipOval(
+                    child: _selectedImage != null
+                        ? Image.file(
+                            _selectedImage!,
+                            fit: BoxFit.cover,
+                            width: 88,
+                            height: 88,
+                          )
+                        : Icon(
+                            Icons.home_rounded,
+                            size: 42,
+                            color: Colors.grey.shade500,
                           ),
-                          const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 10,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFF6F8F6),
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  child: Text(
-                                    _inviteCode,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      letterSpacing: 0.8,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              IconButton(
-                                onPressed: _copyInviteCode,
-                                icon: const Icon(Icons.copy),
-                                tooltip: 'Copy',
-                              ),
-                              IconButton(
-                                onPressed: _isSaving ? null : _rotateInviteCode,
-                                icon: const Icon(Icons.refresh),
-                                tooltip: 'Rotate',
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
                 Positioned(
-                  left: 20,
-                  right: 20,
-                  bottom: 20,
-                  child: FilledButton(
-                    onPressed: _isSaving ? null : _saveHousehold,
-                    style: FilledButton.styleFrom(
-                      backgroundColor: const Color(0xFF13EC13),
-                      foregroundColor: const Color(0xFF102210),
-                      minimumSize: const Size.fromHeight(52),
+                  bottom: 0,
+                  right: 0,
+                  child: Container(
+                    width: 28,
+                    height: 28,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFF13EC13),
+                      shape: BoxShape.circle,
                     ),
-                    child: _isSaving
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Text('Save Household'),
+                    child: const Icon(
+                      Icons.edit_rounded,
+                      size: 15,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
               ],
             ),
+          ),
+          const SizedBox(height: 8),
+          GestureDetector(
+            onTap: _pickImageFromGallery,
+            child: const Text(
+              'Choose from gallery',
+              style: TextStyle(
+                color: Color(0xFF13EC13),
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFieldsSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildUnderlineField(
+          label: 'Household Name',
+          controller: _nameController,
+          textInputAction: TextInputAction.next,
+          maxLength: 80,
+        ),
+        const SizedBox(height: 20),
+        _buildUnderlineField(
+          label: 'Description',
+          controller: _descriptionController,
+          textInputAction: TextInputAction.done,
+          maxLines: 3,
+          maxLength: 240,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildUnderlineField({
+    required String label,
+    required TextEditingController controller,
+    TextInputAction textInputAction = TextInputAction.done,
+    int maxLines = 1,
+    int? maxLength,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: Colors.grey[600],
+            letterSpacing: 0.3,
+          ),
+        ),
+        const SizedBox(height: 6),
+        TextField(
+          controller: controller,
+          textInputAction: textInputAction,
+          maxLines: maxLines,
+          maxLength: maxLength,
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w500,
+            color: Color(0xFF102210),
+          ),
+          decoration: InputDecoration(
+            hintText: label,
+            hintStyle: TextStyle(color: Colors.grey[400], fontSize: 15),
+            border: const UnderlineInputBorder(),
+            enabledBorder: UnderlineInputBorder(
+              borderSide: BorderSide(color: Colors.grey.shade300, width: 1.5),
+            ),
+            focusedBorder: const UnderlineInputBorder(
+              borderSide: BorderSide(color: Color(0xFF13EC13), width: 2),
+            ),
+            contentPadding: const EdgeInsets.symmetric(vertical: 8),
+            isDense: true,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildInviteCodeSection() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Invite Code',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Share this code to invite members',
+            style: TextStyle(color: Colors.grey[500], fontSize: 12),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  _inviteCode,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                    letterSpacing: 1.5,
+                    color: Color(0xFF102210),
+                  ),
+                ),
+              ),
+              IconButton(
+                onPressed: _copyInviteCode,
+                icon: Icon(Icons.copy_rounded, color: Colors.grey[600]),
+                tooltip: 'Copy',
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+              ),
+              const SizedBox(width: 4),
+              IconButton(
+                onPressed: _isSaving ? null : _rotateInviteCode,
+                icon: Icon(Icons.refresh_rounded, color: Colors.grey[600]),
+                tooltip: 'Rotate',
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Codes expire after 48 hours for security.',
+            style: TextStyle(color: Colors.grey[400], fontSize: 11),
+          ),
+        ],
+      ),
     );
   }
 }

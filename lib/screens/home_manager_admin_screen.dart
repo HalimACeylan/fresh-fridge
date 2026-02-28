@@ -159,15 +159,10 @@ class _HomeManagerAdminScreenState extends State<HomeManagerAdminScreen> {
           children: [
             Column(
               children: [
-                FridgeHeader(
+                // No refresh button — pull-to-refresh handles it
+                const FridgeHeader(
                   title: 'Household Settings',
                   centerTitle: true,
-                  trailing: IconButton(
-                    icon: const Icon(Icons.refresh, color: Color(0xFF13EC13)),
-                    onPressed: _isBusy
-                        ? null
-                        : () => _loadData(showLoading: false),
-                  ),
                 ),
                 Expanded(child: _buildBody()),
               ],
@@ -180,13 +175,6 @@ class _HomeManagerAdminScreenState extends State<HomeManagerAdminScreen> {
             ),
           ],
         ),
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _openEditHousehold,
-        backgroundColor: const Color(0xFF13EC13),
-        foregroundColor: const Color(0xFF102210),
-        icon: const Icon(Icons.edit),
-        label: const Text('Edit Household'),
       ),
     );
   }
@@ -217,33 +205,13 @@ class _HomeManagerAdminScreenState extends State<HomeManagerAdminScreen> {
     return RefreshIndicator(
       onRefresh: () => _loadData(showLoading: false),
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 110),
         children: [
           _buildHouseholdInfoCard(),
           const SizedBox(height: 16),
           _buildInviteCodeCard(),
           const SizedBox(height: 24),
-          Text(
-            'MEMBERS',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 1,
-              color: Colors.grey[500],
-            ),
-          ),
-          const SizedBox(height: 10),
-          ..._members.map(_buildMemberTile),
-          if (_members.isEmpty)
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Text('No members found for this household.'),
-            ),
-          const SizedBox(height: 24),
+          _buildMembersSection(),
         ],
       ),
     );
@@ -252,65 +220,86 @@ class _HomeManagerAdminScreenState extends State<HomeManagerAdminScreen> {
   Widget _buildHouseholdInfoCard() {
     final name = (_household?['name'] as String?)?.trim();
     final resolvedName = (name == null || name.isEmpty) ? 'My Household' : name;
-    final description = (_household?['description'] as String?)?.trim() ?? '';
     final plan = (_household?['planTier'] as String?)?.trim().toLowerCase();
     final seatCount = _members.length;
-    final planLabel = plan == null || plan.isEmpty ? 'free' : plan;
+    final planLabel = (plan == null || plan.isEmpty) ? 'free' : plan;
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF13EC13).withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(Icons.home_work_outlined),
+    return GestureDetector(
+      onTap: _openEditHousehold,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: const Color(0xFF13EC13),
+                borderRadius: BorderRadius.circular(12),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      resolvedName,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    Text(
-                      '$seatCount member${seatCount == 1 ? '' : 's'} • ${planLabel.toUpperCase()}',
-                      style: TextStyle(color: Colors.grey[600], fontSize: 12),
-                    ),
-                  ],
-                ),
+              child: const Icon(
+                Icons.home_rounded,
+                color: Colors.white,
+                size: 26,
               ),
-              if (_service.canManageHousehold)
-                IconButton(
-                  onPressed: _openEditHousehold,
-                  icon: const Icon(
-                    Icons.edit_outlined,
-                    color: Color(0xFF13EC13),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    resolvedName,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
-                ),
-            ],
-          ),
-          if (description.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            Text(description, style: TextStyle(color: Colors.grey[700])),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Text(
+                        '$seatCount member${seatCount == 1 ? '' : 's'}',
+                        style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                      ),
+                      const SizedBox(width: 6),
+                      const Text(
+                        '•',
+                        style: TextStyle(color: Colors.grey, fontSize: 12),
+                      ),
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(
+                            0xFF13EC13,
+                          ).withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          planLabel.toUpperCase(),
+                          style: const TextStyle(
+                            color: Color(0xFF0DA80D),
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right, color: Colors.grey, size: 22),
           ],
-        ],
+        ),
       ),
     );
   }
@@ -329,51 +318,140 @@ class _HomeManagerAdminScreenState extends State<HomeManagerAdminScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Invite Members',
-            style: TextStyle(fontWeight: FontWeight.bold),
+          Row(
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF13EC13).withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.group_add_outlined,
+                  size: 18,
+                  color: Color(0xFF0DA80D),
+                ),
+              ),
+              const SizedBox(width: 10),
+              const Text(
+                'Invite Members',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+              ),
+            ],
           ),
-          const SizedBox(height: 6),
-          const Text(
-            'Share this code so others can join your household.',
-            style: TextStyle(color: Colors.grey, fontSize: 12),
+          const SizedBox(height: 8),
+          Text(
+            'Share this unique code to let others join your kitchen.',
+            style: TextStyle(color: Colors.grey[600], fontSize: 12),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
           Row(
             children: [
               Expanded(
                 child: Container(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 10,
+                    horizontal: 16,
+                    vertical: 12,
                   ),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF6F8F6),
+                    border: Border.all(
+                      color: Colors.grey.shade300,
+                      style: BorderStyle.solid,
+                      width: 1.5,
+                    ),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Text(
                     resolvedCode,
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
-                      letterSpacing: 0.7,
+                      letterSpacing: 1.5,
+                      fontSize: 15,
                     ),
+                    textAlign: TextAlign.center,
                   ),
                 ),
               ),
-              IconButton(
-                onPressed: _copyInviteCode,
-                icon: const Icon(Icons.copy_rounded),
+              const SizedBox(width: 8),
+              _InviteActionButton(
+                icon: Icons.copy_rounded,
                 tooltip: 'Copy code',
+                onTap: _copyInviteCode,
               ),
-              IconButton(
-                onPressed: canRotate && !_isBusy ? _rotateInviteCode : null,
-                icon: const Icon(Icons.refresh),
-                tooltip: 'Rotate code',
+              const SizedBox(width: 8),
+              _InviteActionButton(
+                icon: Icons.share_outlined,
+                tooltip: 'Share code',
+                onTap: _copyInviteCode,
               ),
             ],
           ),
+          if (canRotate) ...[
+            const SizedBox(height: 8),
+            GestureDetector(
+              onTap: _isBusy ? null : _rotateInviteCode,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.refresh, size: 14, color: Colors.grey[500]),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Rotate code',
+                    style: TextStyle(color: Colors.grey[500], fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
+    );
+  }
+
+  Widget _buildMembersSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'MEMBERS',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 1,
+                color: Colors.grey[500],
+              ),
+            ),
+            if (_service.canManageHousehold)
+              GestureDetector(
+                onTap: _openEditHousehold,
+                child: const Text(
+                  'Manage all',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF13EC13),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        if (_members.isEmpty)
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Text('No members found for this household.'),
+          )
+        else
+          ..._members.map(_buildMemberTile),
+      ],
     );
   }
 
@@ -382,36 +460,144 @@ class _HomeManagerAdminScreenState extends State<HomeManagerAdminScreen> {
     final displayName = _memberName(member);
     final role = (member['role'] as String?) ?? 'member';
     final isCurrentUser = memberId == _service.userId;
+    final isOwner = role.toLowerCase() == 'owner';
+    final isAdmin = role.toLowerCase() == 'admin';
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
       ),
-      child: ListTile(
-        onTap: memberId.isEmpty ? null : () => _openMemberDetails(memberId),
-        leading: CircleAvatar(
-          backgroundColor: const Color(0xFF13EC13).withValues(alpha: 0.14),
-          child: Text(
-            _initials(displayName),
-            style: const TextStyle(
-              color: Color(0xFF102210),
-              fontWeight: FontWeight.bold,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        child: Row(
+          children: [
+            // Avatar with online dot
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                CircleAvatar(
+                  radius: 22,
+                  backgroundColor: const Color(
+                    0xFF13EC13,
+                  ).withValues(alpha: 0.14),
+                  child: Text(
+                    _initials(displayName),
+                    style: const TextStyle(
+                      color: Color(0xFF102210),
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                    ),
+                  ),
+                ),
+                Positioned(
+                  bottom: 0,
+                  right: 0,
+                  child: Container(
+                    width: 12,
+                    height: 12,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF13EC13),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 1.5),
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ),
-        ),
-        title: Text(
-          isCurrentUser ? '$displayName (You)' : displayName,
-          style: const TextStyle(fontWeight: FontWeight.w700),
-        ),
-        subtitle: Text(_roleLabel(role)),
-        trailing: TextButton.icon(
-          onPressed: memberId.isEmpty
-              ? null
-              : () => _openMemberDetails(memberId),
-          icon: const Icon(Icons.admin_panel_settings_outlined, size: 18),
-          label: const Text('Permissions'),
+            const SizedBox(width: 12),
+            // Name + subtitle
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          isCurrentUser ? '$displayName (You)' : displayName,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 14,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (isOwner || isAdmin) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isOwner
+                                ? const Color(
+                                    0xFF13EC13,
+                                  ).withValues(alpha: 0.15)
+                                : Colors.blue.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            role.toUpperCase(),
+                            style: TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.bold,
+                              color: isOwner
+                                  ? const Color(0xFF0DA80D)
+                                  : Colors.blue[700],
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    _roleSubtitle(role),
+                    style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            // Permissions button
+            if (memberId.isNotEmpty)
+              GestureDetector(
+                onTap: () => _openMemberDetails(memberId),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF6F8F6),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Permissions',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.grey[700],
+                        ),
+                      ),
+                      const SizedBox(width: 2),
+                      Icon(
+                        Icons.chevron_right,
+                        size: 16,
+                        color: Colors.grey[600],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
         ),
       ),
     );
@@ -425,14 +611,14 @@ class _HomeManagerAdminScreenState extends State<HomeManagerAdminScreen> {
     return (member['id'] as String?) ?? 'Member';
   }
 
-  String _roleLabel(String role) {
+  String _roleSubtitle(String role) {
     switch (role.toLowerCase()) {
       case 'owner':
-        return 'Owner';
+        return 'Full access';
       case 'admin':
-        return 'Admin';
+        return 'Admin access';
       default:
-        return 'Member';
+        return 'Standard access';
     }
   }
 
@@ -445,5 +631,36 @@ class _HomeManagerAdminScreenState extends State<HomeManagerAdminScreen> {
     if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
     return (parts.first.substring(0, 1) + parts[1].substring(0, 1))
         .toUpperCase();
+  }
+}
+
+class _InviteActionButton extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  const _InviteActionButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: const Color(0xFFF6F8F6),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, size: 20, color: Colors.grey[700]),
+        ),
+      ),
+    );
   }
 }

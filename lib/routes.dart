@@ -6,6 +6,7 @@ import 'package:fridge_app/screens/scan_receipt_screen.dart';
 import 'package:fridge_app/screens/recent_scan_results_screen.dart';
 import 'package:fridge_app/screens/create_family_group_screen.dart';
 import 'package:fridge_app/screens/home_manager_admin_screen.dart';
+import 'package:fridge_app/screens/join_or_create_household_screen.dart';
 import 'package:fridge_app/screens/household_member_details_screen.dart';
 import 'package:fridge_app/screens/recipe_voting_screen.dart';
 import 'package:fridge_app/screens/fridge_grid_screen.dart';
@@ -21,6 +22,7 @@ class AppRoutes {
   static const String createFamilyGroup = '/create_family_group';
   static const String editHousehold = '/edit_household';
   static const String homeManagerAdmin = '/home_manager_admin';
+  static const String joinOrCreateHousehold = '/join_or_create_household';
   static const String householdMemberDetails = '/household_member_details';
   static const String recipeVoting = '/recipe_voting';
   static const String fridgeGrid = '/fridge_grid';
@@ -36,6 +38,7 @@ class AppRoutes {
     createFamilyGroup: (context) => const CreateFamilyGroupScreen(),
     editHousehold: (context) => const CreateFamilyGroupScreen(),
     homeManagerAdmin: (context) => const HomeManagerAdminScreen(),
+    joinOrCreateHousehold: (context) => const JoinOrCreateHouseholdScreen(),
     householdMemberDetails: (context) => const HouseholdMemberDetailsScreen(),
     recipeVoting: (context) => const RecipeVotingScreen(),
     fridgeGrid: (context) => const FridgeGridScreen(),
